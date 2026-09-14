@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>雾山五行 · 入境</title>
+<style>
+  :root{
+    --accent:#e8412b; --accent2:#ff7a18;   /* 默认：火 */
+    --ink:#0e0d0c; --ink2:#0f1a18;
+    --paper:#ece4d2; --muted:rgba(236,228,210,.55);
+    --line:rgba(236,228,210,.22);
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Kaiti SC","STKaiti","KaiTi","楷体","Songti SC","SimSun",serif;
+    color:var(--paper); overflow:hidden;
+    background:radial-gradient(130% 120% at 50% 12%, #16201d 0%, var(--ink2) 45%, var(--ink) 100%);
+  }
+  canvas{position:fixed; inset:0; z-index:1}
+  /* 雾气山峦 */
+  .fog{position:fixed; left:0; bottom:0; width:100%; z-index:1; pointer-events:none}
+  .fogband{position:fixed; left:0; bottom:0; width:100%; height:42%; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg, rgba(20,30,28,0) 0%, rgba(30,45,42,.55) 70%, rgba(40,60,55,.8) 100%);}
+
+  .wrap{position:relative; z-index:2; height:100%; display:flex; align-items:center; justify-content:center; padding:20px}
+  .panel{
+    width:390px; max-width:100%; padding:42px 36px 36px; border-radius:4px; position:relative;
+    background:linear-gradient(180deg, rgba(18,18,16,.72), rgba(10,10,9,.78));
+    border:1px solid rgba(236,228,210,.16);
+    box-shadow:0 28px 80px rgba(0,0,0,.55), inset 0 0 60px rgba(232,65,43,.06);
+    backdrop-filter:blur(3px);
+  }
+  /* 朱红笔锋斜划 */
+  .brush{position:absolute; top:-26px; left:-14px; width:150px; height:46px; z-index:0; opacity:.9;
+    filter:drop-shadow(0 4px 10px rgba(232,65,43,.5));}
+  .head{position:relative; z-index:1; display:flex; align-items:flex-start; justify-content:space-between}
+  .title{font-size:50px; letter-spacing:8px; line-height:1; color:var(--accent);
+    text-shadow:0 0 18px rgba(232,65,43,.55), 0 2px 2px rgba(0,0,0,.5); font-weight:700}
+  .title small{display:block; font-size:14px; letter-spacing:6px; color:var(--muted); margin-top:10px; font-weight:400}
+  .seal{width:50px; height:50px; border-radius:6px; background:var(--accent); color:#fff8ee;
+    display:grid; place-items:center; font-size:24px; border:2px solid #9c2418; transform:rotate(-4deg);
+    box-shadow:inset 0 0 0 2px rgba(255,248,238,.22), 0 3px 8px rgba(0,0,0,.4);
+    text-align:center; line-height:1.05; padding:3px}
+
+  /* 五行 */
+  .wuxing{display:flex; gap:10px; margin:22px 0 6px; justify-content:center}
+  .wx{padding:6px 0; width:52px; text-align:center; border-radius:8px; cursor:pointer;
+    font-size:17px; letter-spacing:2px; border:1px solid rgba(236,228,210,.18);
+    background:rgba(236,228,210,.04); transition:.2s; color:var(--paper)}
+  .wx:hover{transform:translateY(-3px)}
+  .wx[data-on="1"]{box-shadow:0 0 0 2px currentColor, 0 6px 18px rgba(0,0,0,.4)}
+  .wx small{display:block; font-size:10px; opacity:.6; letter-spacing:1px}
+  .wx.jin{color:#e8c372} .wx.mu{color:#4caf6e} .wx.shui{color:#3a8fd0}
+  .wx.huo{color:#e8412b} .wx.tu{color:#c8923a}
+
+  label{font-size:13px; letter-spacing:3px; color:var(--muted); display:block; margin:20px 0 8px}
+  .field{position:relative}
+  input{width:100%; padding:10px 4px; font-size:16px; font-family:inherit; color:var(--paper);
+    background:transparent; border:0; border-bottom:1.5px solid var(--line); outline:none}
+  input::placeholder{color:rgba(236,228,210,.3)}
+  .field .line{position:absolute; left:0; bottom:0; height:2px; width:0;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .4s ease;
+    box-shadow:0 0 10px var(--accent)}
+  input:focus~.line{width:100%}
+
+  .row{display:flex; align-items:center; justify-content:space-between; margin:22px 0 24px; font-size:13px; color:var(--muted); letter-spacing:1px}
+  .row label{margin:0; display:flex; align-items:center; gap:7px; cursor:pointer}
+  .row a{color:var(--accent2); text-decoration:none}
+
+  button.seal-btn{width:100%; padding:14px; border:2px solid #9c2418; cursor:pointer; font-family:inherit;
+    font-size:20px; letter-spacing:10px; color:#fff8ee; background:var(--accent); border-radius:6px;
+    transform:rotate(-1.5deg); transition:.18s; position:relative;
+    box-shadow:inset 0 0 0 2px rgba(255,248,238,.2), 0 5px 16px rgba(232,65,43,.45)}
+  button.seal-btn:hover{transform:rotate(0) scale(1.02); filter:brightness(1.08)}
+
+  .err{color:var(--accent2); font-size:13px; height:16px; margin-top:12px; text-align:center; letter-spacing:1px}
+  .success{display:none; text-align:center; padding-top:8px}
+  .success .big{font-size:38px; letter-spacing:12px; color:var(--accent); text-shadow:0 0 16px rgba(232,65,43,.5)}
+  .success .mark{width:92px; height:92px; margin:18px auto; border-radius:9px; background:var(--accent);
+    color:#fff8ee; display:grid; place-items:center; font-size:30px; line-height:1.1; text-align:center;
+    border:3px solid #9c2418; transform:rotate(-5deg) scale(0);
+    animation:stamp .5s .1s forwards cubic-bezier(.2,1.4,.4,1);
+    box-shadow:inset 0 0 0 3px rgba(255,248,238,.22)}
+  @keyframes stamp{to{transform:rotate(-5deg) scale(1)}}
+  .hint{position:fixed; bottom:16px; width:100%; text-align:center; z-index:2; color:var(--muted); font-size:12px; letter-spacing:2px}
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <svg class="fog" viewBox="0 0 1440 300" preserveAspectRatio="none">
+    <path fill="#0c1412" opacity="0.95" d="M0,230 C200,150 340,210 480,170 C640,125 780,215 940,180 C1110,142 1260,225 1440,190 L1440,300 L0,300 Z"/>
+    <path fill="#08100e" opacity="0.98" d="M0,270 C220,220 380,265 540,240 C720,210 880,285 1060,250 C1230,218 1340,275 1440,255 L1440,300 L0,300 Z"/>
+  </svg>
+  <div class="fogband"></div>
+
+  <div class="wrap">
+    <div class="panel" id="card">
+      <svg class="brush" viewBox="0 0 150 46"><path d="M6,38 C40,8 90,6 144,14 C120,22 70,30 30,40 C20,42 12,42 6,38 Z" fill="var(--accent)"/></svg>
+      <div id="formView">
+        <div class="head">
+          <div class="title">雾山<small>五 行 · 入 境</small></div>
+          <div class="seal">雾<br>山</div>
+        </div>
+
+        <div class="wuxing">
+          <div class="wx jin"  data-c="#e8c372" data-on="0">金<small>metal</small></div>
+          <div class="wx mu"   data-c="#4caf6e" data-on="0">木<small>wood</small></div>
+          <div class="wx shui" data-c="#3a8fd0" data-on="0">水<small>water</small></div>
+          <div class="wx huo"  data-c="#e8412b" data-on="1">火<small>fire</small></div>
+          <div class="wx tu"   data-c="#c8923a" data-on="0">土<small>earth</small></div>
+        </div>
+
+        <label>名 号</label>
+        <div class="field"><input id="user" placeholder="入山落款…" autocomplete="off"><span class="line"></span></div>
+        <label>暗 语</label>
+        <div class="field"><input id="pass" type="password" placeholder="••••••"><span class="line"></span></div>
+        <div class="row">
+          <label><input type="checkbox" id="rem"> 铭记于山</label>
+          <a href="#" onclick="return false">忘却暗语？</a>
+        </div>
+        <button class="seal-btn" id="btn">入 山</button>
+        <div class="err" id="err"></div>
+      </div>
+      <div class="success" id="successView">
+        <div class="big">已 入 山</div>
+        <div class="mark" id="mark">入<br>山</div>
+        <p class="sub" id="welcome" style="color:var(--muted);letter-spacing:3px;margin-top:0">五行归一，君已至此。</p>
+      </div>
+    </div>
+  </div>
+  <div class="hint">纯前端 demo · 点五行可换主题色 · 任意非空名号暗语即可入山 · 桌面 login-wushan.html</div>
+
+<script>
+/* ---------- 雾 + 火 墨 ---------- */
+const cv=document.getElementById('bg'), ctx=cv.getContext('2d');
+let W,H, emberColor='#e8412b', embers=[], mist=[];
+function resize(){W=cv.width=innerWidth; H=cv.height=innerHeight;
+  mist=[]; for(let i=0;i<6;i++) mist.push({x:Math.random()*W,y:Math.random()*H*0.6+40,
+    r:Math.random()*220+160, vx:(Math.random()-.5)*0.25, a:Math.random()*0.05+0.03});
+}
+addEventListener('resize',resize); resize();
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+
+function spawnEmber(x,y,n,spread){
+  for(let i=0;i<n;i++) embers.push({x,y,vx:(Math.random()-.5)*spread,vy:-Math.random()*1.6-0.4,
+    life:1, r:Math.random()*2.4+1.2, hue:Math.random()<0.5?emberColor:'#ff7a18'});
+}
+addEventListener('mousemove',e=>{ if(Math.random()<0.4) spawnEmber(e.clientX,e.clientY,1,0.8); });
+addEventListener('click',e=>{ spawnEmber(e.clientX,e.clientY,40,3); });
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // 雾气
+  ctx.globalCompositeOperation='source-over';
+  for(const m of mist){ m.x+=m.vx; if(m.x<-m.r)m.x=W+m.r; if(m.x>W+m.r)m.x=-m.r;
+    const g=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.r);
+    g.addColorStop(0,`rgba(120,140,135,${m.a})`); g.addColorStop(1,'rgba(120,140,135,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(m.x,m.y,m.r,0,7); ctx.fill();
+  }
+  // 火星（叠加发光）
+  ctx.globalCompositeOperation='lighter';
+  for(let i=embers.length-1;i>=0;i--){const p=embers[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.01; p.life-=0.012; p.r*=0.992;
+    if(p.life<=0){embers.splice(i,1);continue;}
+    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+    g.addColorStop(0,hexA(p.hue,p.life)); g.addColorStop(1,hexA(p.hue,0));
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*4,0,7); ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+  if(embers.length<200 && Math.random()<0.5) spawnEmber(Math.random()*W, H*0.5+Math.random()*H*0.4, 1, 1.2);
+  requestAnimationFrame(draw);
+}
+draw();
+
+/* 五行换色 */
+const root=document.documentElement;
+document.querySelectorAll('.wx').forEach(el=>el.onclick=()=>{
+  const c=el.dataset.c;
+  root.style.setProperty('--accent',c);
+  emberColor = el.classList.contains('huo') ? '#e8412b' : c;
+  document.querySelectorAll('.wx').forEach(x=>x.dataset.on='0');
+  el.dataset.on='1';
+});
+
+/* 登录 */
+const btn=document.getElementById('btn'), err=document.getElementById('err'),
+  user=document.getElementById('user'), pass=document.getElementById('pass'), card=document.getElementById('card');
+btn.onclick=()=>{
+  if(!user.value.trim()||!pass.value.trim()){
+    err.textContent='名号与暗语，皆不可空。';
+    card.animate([{transform:'translateX(0)'},{transform:'translateX(-8px)'},{transform:'translateX(7px)'},
+      {transform:'translateX(-5px)'},{transform:'translateX(0)'}],{duration:420});
+    return;
+  }
+  err.textContent=''; btn.disabled=true; btn.textContent='落 印…';
+  const r=card.getBoundingClientRect();
+  spawnEmber(r.left+r.width/2, r.top+r.height/2, 80, 4);  // 火爆
+  setTimeout(()=>{
+    document.getElementById('formView').style.display='none';
+    document.getElementById('successView').style.display='block';
+    document.getElementById('welcome').textContent='五行归一，'+user.value.trim()+' 已至此。';
+  },850);
+};
+[user,pass].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')btn.onclick();}));
+</script>
+</body>
+</html>
