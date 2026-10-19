@@ -1,0 +1,28 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+dist-ssr/
+
+# 日志
+*.log
+_vite.log
+_fe_build.log
+
+# 编辑器
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 本地环境变量
+.env.local
+.env.*.local

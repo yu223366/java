@@ -1,0 +1,26 @@
+/* 全局基础样式 —— 还原原 login-wushan.html 的 :root 变量与 body 背景 */
+:root {
+  --ink: #0e0d0c;
+  --ink2: #0f1a18;
+  --paper: #ece4d2;
+  --muted: rgba(236, 228, 210, 0.55);
+  --line: rgba(236, 228, 210, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: "Kaiti SC", "STKaiti", "KaiTi", "楷体", "Songti SC", "SimSun", serif;
+  color: var(--paper);
+  overflow: hidden;
+  background: radial-gradient(130% 120% at 50% 12%, #16201d 0%, var(--ink2) 45%, var(--ink) 100%);
+}
