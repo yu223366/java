@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 藏经阁秘境实体，对应表 wushan_realm。
+ * 宝库秘境实体，对应表 wushan_realm。
  */
 @Data
 @TableName("wushan_realm")

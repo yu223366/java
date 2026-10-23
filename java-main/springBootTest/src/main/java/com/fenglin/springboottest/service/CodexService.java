@@ -6,7 +6,7 @@ import com.fenglin.springboottest.controller.dto.RealmVo;
 import com.fenglin.springboottest.controller.dto.SpiritRootVo;
 
 /**
- * 藏经阁业务：功法 / 心得 / 修炼资源条目 + 灵根 + 秘境。
+ * 宝库业务：功法 / 心得 / 修炼资源条目 + 灵根 + 秘境。
  * 对接前端 src/api/codex.js 的接口契约（BASE_URL=/api）。
  */
 public interface CodexService {

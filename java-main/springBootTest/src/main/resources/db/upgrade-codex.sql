@@ -1,8 +1,8 @@
 -- ============================================================
---  雾山五行 · 藏经阁后端升级（灵根 / 秘境）
+--  雾山五行 · 宝库后端升级（灵根 / 秘境）
 --  说明：在已有 schema-home.sql + upgrade-nav.sql 基础上的增量脚本：
---    * 新建 wushan_spirit_root 灵根表（藏经阁「灵根」页签数据源）
---    * 新建 wushan_realm      秘境表（藏经阁「秘境」页签数据源）
+--    * 新建 wushan_spirit_root 灵根表（宝库「灵根」页签数据源）
+--    * 新建 wushan_realm      秘境表（宝库「秘境」页签数据源）
 --    * 种子数据与前端常量 src/constants/codex.js（SPIRIT_ROOTS / REALMS）同口径
 --  后端接口见 controller/CodexController.java：
 --    GET /api/codex/items        条目（功法/心得/修炼资源，查 wushan_item）
@@ -29,7 +29,7 @@ CREATE TABLE wushan_spirit_root (
   UNIQUE KEY uk_root_name (name),
   KEY idx_element (element),
   KEY idx_grade (grade_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='藏经阁灵根';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='宝库灵根';
 
 INSERT INTO wushan_spirit_root (name, element, grade_key, summary, sort) VALUES
 ('庚金灵根', 'jin',    'tian',  '锋锐天成，习金行功法一日千里，杀伐之气重。', 1),
@@ -71,7 +71,7 @@ CREATE TABLE wushan_realm (
   UNIQUE KEY uk_realm_name (name),
   KEY idx_element (element),
   KEY idx_grade (grade_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='藏经阁秘境';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='宝库秘境';
 
 INSERT INTO wushan_realm (name, element, grade_key, layers, summary, sort) VALUES
 ('焚火秘境',   'huo',    'di',   '九层',   '地火奔涌，愈深愈烈，最深处传闻有火髓。',   1),

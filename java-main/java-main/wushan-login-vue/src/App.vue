@@ -1,6 +1,7 @@
 <script setup>
 // 根组件：负责整体布局，并把「五行主题色」状态提升到此处，
-// 同时分发给背景粒子（emberColor）与面板（accent）；并在登录 / 注册 / 首页 / 藏经阁视图间切换。
+// 同时分发给背景粒子（emberColor）与面板（accent）；
+// 并在 登录 / 注册 / 首页 / 宝库 / 后台登录 / 后台管理 六个视图间切换。
 import { ref, computed } from 'vue'
 import EmberBackground from './components/EmberBackground.vue'
 import FogMountains from './components/FogMountains.vue'
@@ -8,14 +9,19 @@ import LoginPanel from './components/LoginPanel.vue'
 import RegisterPanel from './components/RegisterPanel.vue'
 import HomePanel from './components/HomePanel.vue'
 import CodexPanel from './components/CodexPanel.vue'
+import AdminLoginPanel from './components/AdminLoginPanel.vue'
+import AdminPanel from './components/AdminPanel.vue'
+import { adminApi } from './api/admin'
 import bgYinyang from './assets/bg-yinyang.jpg'
 
 const accent = ref('#e8412b')
 const accent2 = ref('#ff7a18')
 const emberColor = ref('#e8412b')
 const bg = ref(null)
-const view = ref('login') // login | register | home | codex
+// login | register | home | codex | admin-login | admin
+const view = ref('login')
 const username = ref('') // 登录成功的名号，带入首页
+const adminName = ref('') // 后台登录成功的执事名号，带入后台
 
 // 五行被点击：更新主题色与火星颜色（火元素使用默认红，其余使用所选色）
 function onSelect({ color, huo }) {
@@ -40,9 +46,32 @@ function onLogout() {
   view.value = 'login'
 }
 
-// 首页导航：藏经 → 藏经阁；其余项暂为占位（后续接分页）
+// 首页导航：宝库 → 宝库页；其余项暂为占位（后续接分页）
+// cangjing 为改名前的旧 key，库里若还是旧种子数据也能正常跳转
 function onNav(item) {
-  if (item && item.key === 'cangjing') view.value = 'codex'
+  if (item && (item.key === 'baoku' || item.key === 'cangjing')) view.value = 'codex'
+}
+
+// 首页导航栏「后台」：已持执事令牌就直接回后台（刷新页面不必重新登录），否则去登录页
+function onGoAdminLogin() {
+  if (adminApi.isLogin()) {
+    adminName.value = adminApi.currentName()
+    view.value = 'admin'
+    return
+  }
+  view.value = 'admin-login'
+}
+
+// 后台登录成功：进入后台管理系统
+function onEnterAdmin(name) {
+  adminName.value = name || ''
+  view.value = 'admin'
+}
+
+// 后台退出：清名号，回首页
+function onAdminLogout() {
+  adminName.value = ''
+  view.value = 'home'
 }
 
 const hint = computed(() =>
@@ -51,8 +80,12 @@ const hint = computed(() =>
     : view.value === 'register'
       ? '立 契 · 本命既定，五行同辉 · 名号与暗语须经校验'
       : view.value === 'codex'
-        ? '藏 经 阁 · 功法心得资源灵根秘境 · 按元素与品阶翻检'
-        : '雾 山 · 境 内 · 点五行可换主题色'
+        ? '宝 库 · 功法心得资源灵根秘境 · 按元素与品阶翻检'
+        : view.value === 'admin-login'
+          ? '后 台 · 执 事 入 内 · 此 处 只 通 执 事'
+          : view.value === 'admin'
+            ? '后 台 · 宝 库 数 据 管 理 · 改 动 即 时 生 效'
+            : '雾 山 · 境 内 · 点五行可换主题色'
 )
 </script>
 
@@ -66,7 +99,7 @@ const hint = computed(() =>
     <FogMountains />
     <div class="fogband"></div>
 
-    <div class="wrap" :class="{ 'wrap-home': view === 'home' || view === 'codex' }">
+    <div class="wrap" :class="{ 'wrap-home': view === 'home' || view === 'codex' || view === 'admin' }">
       <Transition name="swap" mode="out-in">
         <CodexPanel
           v-if="view === 'codex'"
@@ -80,6 +113,21 @@ const hint = computed(() =>
           @select="onSelect"
           @logout="onLogout"
           @nav="onNav"
+          @to-admin="onGoAdminLogin"
+        />
+        <AdminPanel
+          v-else-if="view === 'admin'"
+          key="admin"
+          :username="adminName"
+          @logout="onAdminLogout"
+          @to-home="view = 'home'"
+        />
+        <AdminLoginPanel
+          v-else-if="view === 'admin-login'"
+          key="admin-login"
+          @to-admin="onEnterAdmin"
+          @to-home="view = 'home'"
+          @burst="onBurst"
         />
         <RegisterPanel
           v-else-if="view === 'register'"
@@ -99,7 +147,8 @@ const hint = computed(() =>
       </Transition>
     </div>
 
-    <div class="hint">{{ hint }}</div>
+    <!-- 后台管理页自带状态栏，不再叠一层底部提示 -->
+    <div class="hint" v-if="view !== 'admin'">{{ hint }}</div>
   </div>
 </template>
 

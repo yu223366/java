@@ -41,11 +41,12 @@
  * ============================================================
  */
 import { BASE_URL, USE_MOCK, tokenStore } from './auth'
+import * as treasury from '../utils/treasuryStore'
 
 const TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT || 12000)
 
 /* ------------------------------ 基础请求 ------------------------------ */
-async function request(path, { method = 'GET', data, query } = {}) {
+async function request(path, { method = 'GET', data, query, signal } = {}) {
   let url = BASE_URL + path
   if (query) {
     const qs = new URLSearchParams(
@@ -56,6 +57,16 @@ async function request(path, { method = 'GET', data, query } = {}) {
 
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT)
+  // 外部传入的 signal：用于联想请求的竞态取消（新输入作废上一次请求）
+  let onOuterAbort = null
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(timer)
+      throw new Error('请求已取消')
+    }
+    onOuterAbort = () => ctrl.abort()
+    signal.addEventListener('abort', onOuterAbort)
+  }
 
   try {
     const res = await fetch(url, {
@@ -75,10 +86,15 @@ async function request(path, { method = 'GET', data, query } = {}) {
     }
     return body.data !== undefined ? body.data : body
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('山门路远，请求超时，请重试。')
+    if (e.name === 'AbortError') {
+      // 外部取消（联想竞态）不上抛业务文案，交由调用方静默处理
+      if (signal && signal.aborted) throw e
+      throw new Error('山门路远，请求超时，请重试。')
+    }
     throw e instanceof Error ? e : new Error('网络异常，请稍后重试。')
   } finally {
     clearTimeout(timer)
+    if (signal && onOuterAbort) signal.removeEventListener('abort', onOuterAbort)
   }
 }
 
@@ -87,7 +103,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const mockNav = [
   { key: 'guanshan', label: '观山', en: 'scenery' },
-  { key: 'cangjing', label: '藏经', en: 'codex' },
+  { key: 'baoku', label: '宝库', en: 'treasury' },
   { key: 'lundao', label: '论道', en: 'discourse' },
   { key: 'shiji', label: '市集', en: 'market' }
 ]
@@ -109,7 +125,7 @@ const mockHotKeywords = [
 // 山门公告（跑马灯轮播）
 const mockAnnouncements = [
   { id: 1, text: '今日卯时东岭雾散，观山道上可见云海，宜出行。' },
-  { id: 2, text: '藏经阁新录《五行总纲》批注三卷，山友可借阅。' },
+  { id: 2, text: '宝库新录《五行总纲》批注三卷，山友可借阅。' },
   { id: 3, text: '论道台今晚戌时开讲：火行「心明」之辨。' },
   { id: 4, text: '市集三日内以物易物，免山税。' }
 ]
@@ -137,7 +153,8 @@ const mockDiscourse = [
 ]
 
 // 模拟搜索库：按关键字模糊匹配
-const mockLibrary = [
+// 说明：mock 模式下改为实时取本地宝库数据源，后台管理系统的增删改会立刻反映到首页搜索
+const mockLibrarySeed = [
   { id: 1, title: '雾山秘录 · 卷一', element: 'huo', desc: '五山武星之火卷，载炽烈心明之法。' },
   { id: 2, title: '金石锻造录', element: 'jin', desc: '锋锐决断，金行兵刃锻造全解。' },
   { id: 3, title: '山涧灵草图鉴', element: 'mu', desc: '生发仁厚，草木图谱与采撷时令。' },
@@ -151,6 +168,17 @@ const mockLibrary = [
   { id: 11, title: '太极图谱', element: 'taiji', desc: '圆融万化，阴阳鱼推手与套路图解。' },
   { id: 12, title: '阴阳双鱼石拓本', element: 'yinyang', desc: '相济消长，山中古碑的双鱼拓片。' }
 ]
+
+/** 首页搜索库：优先取后台维护的宝库条目，回落种子数据 */
+function mockLibrary() {
+  try {
+    const list = treasury.getList('items')
+    if (list && list.length) return list
+  } catch (e) {
+    /* 数据源异常时回落种子 */
+  }
+  return mockLibrarySeed
+}
 
 // 分类树（与后端 wushan_category 种子数据同口径，mock 模式用）
 const mockCategories = [
@@ -241,14 +269,30 @@ export const homeApi = {
     return request('/home/discourse')
   },
 
-  /** 搜索联想（输入时调用，可按需在组件中启用） */
-  suggest(q) {
+  /**
+   * 搜索联想（输入时调用）
+   * @param {string} q 已输入关键词
+   * @param {{signal?:AbortSignal}} [opts] 可选 AbortSignal，用于取消上一次联想请求
+   * @returns {Promise<string[]>} 建议词列表（最多 8 条）
+   */
+  async suggest(q, opts = {}) {
+    const kw = String(q || '').trim()
     if (USE_MOCK) {
-      const kw = String(q || '').trim()
-      const hits = mockLibrary.filter((i) => i.title.includes(kw)).map((i) => i.title)
-      return Promise.resolve(hits.slice(0, 6))
+      if (!kw) return []
+      await sleep(140)
+      const lower = kw.toLowerCase()
+      const hits = mockLibrary().filter(
+        (i) =>
+          i.title.includes(kw) ||
+          i.desc.includes(kw) ||
+          i.title.toLowerCase().includes(lower)
+      )
+      // 去重：同一标题只出现一次，标题优先于简介
+      const titles = []
+      hits.forEach((i) => { if (titles.indexOf(i.title) === -1) titles.push(i.title) })
+      return titles.slice(0, 8)
     }
-    return request('/home/search/suggest', { query: { q } })
+    return request('/home/search/suggest', { query: { q: kw }, signal: opts.signal })
   },
 
   /**
@@ -266,12 +310,20 @@ export const homeApi = {
     const kw = String(keyword || '').trim()
     if (USE_MOCK) {
       await sleep(500)
-      let list = mockLibrary
+      let list = mockLibrary()
       // mock 模式下也尽力支持 element / category 基础过滤，便于离线演示
       if (filters.element && filters.element !== 'all') {
         list = list.filter((i) => i.element === filters.element)
       }
-      const items = list.filter((i) => i.title.includes(kw) || i.desc.includes(kw))
+      if (filters.category && filters.category !== 'all') {
+        list = list.filter((i) => i.category === filters.category)
+      }
+      const items = kw
+        ? list.filter(
+            (i) =>
+              String(i.title || '').includes(kw) || String(i.desc || '').includes(kw)
+          )
+        : list
       return { total: items.length, page: 1, size: items.length, items }
     }
     return request('/home/search', {

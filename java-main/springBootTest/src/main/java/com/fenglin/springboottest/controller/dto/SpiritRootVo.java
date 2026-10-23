@@ -3,7 +3,7 @@ package com.fenglin.springboottest.controller.dto;
 import lombok.Data;
 
 /**
- * 藏经阁灵根 VO（灵根页签）。
+ * 宝库灵根 VO（灵根页签）。
  * 字段与前端契约一致：{ id, name, element, grade, gradeLabel, desc }。
  */
 @Data

@@ -39,7 +39,7 @@ CREATE TABLE wushan_category (
   PRIMARY KEY (id),
   UNIQUE KEY uk_cat_key (cat_key),
   KEY idx_parent (parent_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='藏经分类（分级）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='宝库分类（分级）';
 
 INSERT INTO wushan_category (id, cat_key, name, en, parent_id, cat_level, sort) VALUES
   (1, 'gongfa',  '功法',     'technique', 0, 1, 1),
@@ -96,7 +96,7 @@ CREATE TABLE wushan_item (
   KEY idx_category (category_id),
   KEY idx_grade (grade_key),
   KEY idx_title (title)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='藏经条目（搜索对象）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='宝库条目（搜索对象）';
 
 INSERT INTO wushan_item (title, summary, element, grade_key, category_id, sort) VALUES
 /* ---- 火 ---- */
@@ -245,9 +245,13 @@ CREATE TABLE wushan_nav (
 
 INSERT INTO wushan_nav (nav_key, label, en, sort) VALUES
   ('guanshan', '观山', 'scenery',   1),
-  ('cangjing', '藏经', 'codex',     2),
+  -- 2026-10-23 改名：藏经 → 宝库（前端导航 key 同步 baoku）
+  ('baoku',    '宝库', 'treasury',  2),
   ('lundao',   '论道', 'discourse', 3),
   ('shiji',    '市集', 'market',    4);
+
+-- 已建库跑过旧种子的，执行下面这条在线改名（无需重建表）：
+-- UPDATE wushan_nav SET nav_key='baoku', label='宝库', en='treasury' WHERE nav_key='cangjing';
 
 -- ------------------------------------------------------------
 -- 5) 热门搜索词
@@ -292,7 +296,7 @@ CREATE TABLE wushan_announcement (
 
 INSERT INTO wushan_announcement (text, sort) VALUES
   ('今日卯时东岭雾散，观山道上可见云海，宜出行。',                 1),
-  ('藏经阁新录《五行总纲》批注三卷，山友可借阅。',                 2),
+  ('宝库新录《五行总纲》批注三卷，山友可借阅。',                 2),
   ('论道台今晚戌时开讲：火行「心明」之辨。',                       3),
   ('市集三日内以物易物，免山税。',                                 4);
 

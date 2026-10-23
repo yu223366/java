@@ -1,5 +1,5 @@
 <script setup>
-// 藏经阁：十种元素 × 分类（功法/心得/修炼资源/灵根/秘境）× 品阶（凡黄玄地天圣）
+// 宝库（原藏经阁）：十种元素 × 分类（功法/心得/修炼资源/灵根/秘境）× 品阶（凡黄玄地天圣）
 // 左侧元素栏 + 顶部分类页签 + 品阶筛选，风格延续登录页水墨五行。
 // 数据接口见 ../api/codex.js —— 前端 mock 可跑，后端接上即用。
 import { ref, computed, watch, onMounted } from 'vue'
@@ -71,9 +71,9 @@ function resetGrade() {
     <header class="codex-head">
       <button class="back-btn" @click="emit('to-home')">‹ 回首页</button>
       <div class="head-brand">
-        <div class="seal">藏<br />经</div>
+        <div class="seal">宝<br />库</div>
         <div class="brand-text">
-          <span class="name">藏经阁</span>
+          <span class="name">宝库</span>
           <small>功 法 · 心 得 · 资 源 · 灵 根 · 秘 境</small>
         </div>
       </div>
@@ -187,7 +187,7 @@ function resetGrade() {
         </div>
 
         <!-- 空态 / 加载中 -->
-        <div class="empty" v-else-if="!loading">阁中无此藏，换个元素或品阶再翻。</div>
+        <div class="empty" v-else-if="!loading">库中无此藏，换个元素或品阶再翻。</div>
       </section>
     </div>
   </div>

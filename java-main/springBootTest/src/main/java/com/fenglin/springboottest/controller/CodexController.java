@@ -6,7 +6,7 @@ import com.fenglin.springboottest.service.CodexService;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 藏经阁控制器，对接前端 src/api/codex.js 的接口契约。
+ * 宝库控制器，对接前端 src/api/codex.js 的接口契约。
  * 所有接口前缀 /api/codex（前端 BASE_URL=/api，由 Vite 代理到 8080）。
  *
  * 接口清单：

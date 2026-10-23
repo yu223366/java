@@ -11,7 +11,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 藏经阁业务实现：条目（功法/心得/修炼资源，查 wushan_item）+ 灵根 + 秘境。
+ * 宝库业务实现：条目（功法/心得/修炼资源，查 wushan_item）+ 灵根 + 秘境。
  * 分类支持分级下钻：传一级分类（如 gongfa 功法）自动包含其全部二级子类（心法/身法/术法/阵法），
  * 与首页搜索、市集筛选口径一致。
  */

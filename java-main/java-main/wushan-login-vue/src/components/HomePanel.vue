@@ -1,23 +1,25 @@
 <script setup>
 // 首页：登录成功后进入。风格延续登录页 —— 水墨 / 楷体 / 印章 / 五行换色 / 星火粒子。
 // 导航四项内容：「观山」= 五行卡片 / 相生环 / 四时图卷 / 论道榜 + 大搜索（分级分类筛选）；
-//   「藏经」→ 跳转藏经阁（App 层切视图）；「论道」= 论道堂（登台发表 + 服务端点赞 + 分页）；
+//   「宝库」→ 跳转宝库页（原藏经阁，App 层切视图）；「论道」= 论道堂（登台发表 + 服务端点赞 + 分页）；
 //   「市集」= 雾山市集（分类/五行/品阶筛选 + 灵石购买 + 分页），数据首次切入时懒加载。
 // 山门公告跑马灯 / 墨韵页脚 / 回顶按钮为全栏共用。
 // 所有数据接口见 ../api/home.js —— 前端 mock 可跑，后端接上即用。
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { homeApi } from '../api/home'
 import { ELEMENTS, findElement } from '../constants/wuxing'
+import { getHistory, addHistory, removeHistory, clearHistory } from '../utils/searchHistory'
+import { highlight } from '../utils/highlight'
 
 const props = defineProps({
   username: { type: String, default: '' }
 })
-const emit = defineEmits(['select', 'logout', 'nav'])
+const emit = defineEmits(['select', 'logout', 'nav', 'to-admin'])
 
 /* ------------------------------ 导航栏 ------------------------------ */
 const navItems = ref([
   { key: 'guanshan', label: '观山', en: 'scenery' },
-  { key: 'cangjing', label: '藏经', en: 'codex' },
+  { key: 'baoku', label: '宝库', en: 'treasury' },
   { key: 'lundao', label: '论道', en: 'discourse' },
   { key: 'shiji', label: '市集', en: 'market' }
 ])
@@ -27,8 +29,8 @@ const navLoaded = ref({ guanshan: true })
 
 function switchNav(item) {
   activeNav.value = item.key
-  // 藏经 → 藏经阁（App 层切视图）；观山/论道/市集在首页内切换内容
-  if (item.key === 'cangjing') {
+  // 宝库 → 宝库页（App 层切视图）；观山/论道/市集在首页内切换内容
+  if (item.key === 'baoku') {
     emit('nav', item)
     return
   }
@@ -65,12 +67,35 @@ const shichen = DIZHI[Math.floor(((now.getHours() + 1) % 24) / 2)]
 const yi = YI_LIST[now.getHours() % YI_LIST.length]
 const greeting = computed(() => `此刻山外 ${shichen} 时 · ${yi}`)
 
-/* ------------------------------ 搜索栏（分级分类筛选 + 分页） ------------------------------ */
+/* ------------------------------ 搜索栏（联想 + 历史 + 分级分类筛选 + 分页） ------------------------------ */
 const keyword = ref('')
 const searching = ref(false)
 const searched = ref(false)
 const results = ref([])
 const hotKeywords = ref([])
+const elapsed = ref(0)        // 本次搜索耗时（秒）
+const resultsEl = ref(null)   // 结果区元素：搜完自动滚过去
+
+/* —— 联想下拉 —— */
+const searchWrap = ref(null)  // 搜索栏容器（判定点击外部）
+const searchInput = ref(null) // input 元素（聚焦 / 全选）
+const composing = ref(false)  // 中文输入法拼写中：不触发联想、不拦回车
+const suggestions = ref([])   // 联想词 ['雾山秘录 · 卷一', ...]
+const suggestOpen = ref(false)
+const suggestIndex = ref(-1)  // 键盘高亮项下标
+const suggestLoading = ref(false)
+let suggestTimer = null
+let suggestCtrl = null
+
+/* —— 搜索历史（本地持久化） —— */
+const history = ref(getHistory(props.username))
+
+/** 面板中可键盘导航的条目：有联想用联想，否则用历史 */
+const panelOptions = computed(() =>
+  suggestions.value.length
+    ? suggestions.value.map((t) => ({ type: 'suggest', text: t }))
+    : history.value.map((t) => ({ type: 'history', text: t }))
+)
 
 // 分级分类筛选状态：分类树 + 品阶字典由后端提供（mock 模式下走 home.js 内置同口径数据）
 const categories = ref([])   // [{ key, label, children: [{ key, label }] }]
@@ -81,6 +106,115 @@ const gradeAbove = ref(false) // 品阶「及以上」分级筛选开关
 const total = ref(0)
 const loadingMore = ref(false)
 const PAGE_SIZE = 10
+const hasFilter = computed(() => filterCategory.value !== 'all' || filterGrade.value !== 'all')
+
+/* —— 下拉面板开合 —— */
+function openPanel() { suggestOpen.value = true }
+function closePanel() { suggestOpen.value = false; suggestIndex.value = -1 }
+
+function onFocus() {
+  openPanel()
+  if (!keyword.value.trim()) suggestions.value = []
+}
+
+/** 输入即联想：防抖 220ms，取消上一次未完成请求 */
+function onInput() {
+  suggestIndex.value = -1
+  suggestOpen.value = true
+  if (composing.value) return
+  clearTimeout(suggestTimer)
+  const q = keyword.value.trim()
+  if (!q) {
+    cancelSuggest()
+    suggestions.value = []
+    suggestLoading.value = false
+    return
+  }
+  suggestLoading.value = true
+  suggestTimer = setTimeout(() => fetchSuggest(q), 220)
+}
+
+/** 输入法拼写结束（中文上屏）后再拉一次联想 */
+function onCompositionEnd(e) {
+  composing.value = false
+  const q = String((e && e.target && e.target.value) || keyword.value).trim()
+  if (!q) return
+  suggestLoading.value = true
+  clearTimeout(suggestTimer)
+  suggestTimer = setTimeout(() => fetchSuggest(q), 60)
+}
+
+function cancelSuggest() {
+  clearTimeout(suggestTimer)
+  if (suggestCtrl) {
+    suggestCtrl.abort()
+    suggestCtrl = null
+  }
+}
+
+async function fetchSuggest(q) {
+  cancelSuggest()
+  suggestCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null
+  try {
+    const list = await homeApi.suggest(q, { signal: suggestCtrl ? suggestCtrl.signal : undefined })
+    suggestions.value = Array.isArray(list) ? list.filter(Boolean).slice(0, 8) : []
+    suggestIndex.value = -1
+  } catch (e) {
+    /* 联想失败静默：不影响手动回车搜索 */
+  } finally {
+    suggestLoading.value = false
+    suggestCtrl = null
+  }
+}
+
+/** 键盘导航：↑↓ 择词 / Enter 起寻 / Esc 收起 */
+function onKeydown(e) {
+  if (e.isComposing || composing.value) return // 回车交给输入法
+  const opts = panelOptions.value
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!opts.length) return
+    e.preventDefault()
+    if (!suggestOpen.value) { openPanel(); return }
+    const step = e.key === 'ArrowDown' ? 1 : -1
+    suggestIndex.value = (suggestIndex.value + step + opts.length) % opts.length
+    return
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const pick = suggestIndex.value >= 0 ? opts[suggestIndex.value] : null
+    if (pick) pickOption(pick)
+    else doSearch()
+    return
+  }
+  if (e.key === 'Escape' && suggestOpen.value) {
+    e.preventDefault()
+    closePanel()
+  }
+}
+
+function pickOption(opt) {
+  keyword.value = opt.text
+  closePanel()
+  cancelSuggest()
+  suggestions.value = []
+  doSearch(opt.text)
+}
+
+/** 一键清空：只清输入框，不动已出结果（避免误触丢失） */
+function clearKeyword() {
+  keyword.value = ''
+  cancelSuggest()
+  suggestions.value = []
+  suggestIndex.value = -1
+  suggestLoading.value = false
+  if (searchInput.value) searchInput.value.focus()
+}
+
+/* —— 历史增删 —— */
+function pushHistory(kw) { history.value = addHistory(kw, props.username) }
+function removeOneHistory(kw) { history.value = removeHistory(kw, props.username) }
+function clearAllHistory() { history.value = clearHistory(props.username) }
 
 /** 组装当前筛选条件（category 传一级分类时后端自动下钻子类） */
 function currentFilters(page) {
@@ -102,23 +236,49 @@ async function fetchSearch(kw, page) {
   searched.value = true
 }
 
+const nowMs = () =>
+  typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()
+
 async function doSearch(kw) {
   const q = String(kw ?? keyword.value).trim()
   // 无关键词且未选任何筛选时不搜；选了分类/品阶则允许空关键词浏览全类
-  if (!q && filterCategory.value === 'all' && filterGrade.value === 'all') {
+  if (!q && !hasFilter.value) {
     keyword.value = ''
+    closePanel()
+    if (searchInput.value) searchInput.value.focus() // 空搜 → 请他先落笔
     return
   }
   keyword.value = q
+  closePanel()
+  cancelSuggest()
+  suggestions.value = []
+  if (q) pushHistory(q)
   searching.value = true
+  const t0 = nowMs()
   try {
     await fetchSearch(q, 1)
+    elapsed.value = (nowMs() - t0) / 1000
+    await nextTick()
+    scrollToResults()
   } catch (e) {
     results.value = []
     total.value = 0
     searched.value = true
   } finally {
     searching.value = false
+  }
+}
+
+/** 搜完把结果区滚进视野（滚动容器为 .home，需让开固定导航栏与公告条） */
+function scrollToResults() {
+  const el = resultsEl.value
+  if (!el) return
+  const box = homeEl.value
+  if (box && typeof box.scrollTo === 'function') {
+    const top = (el.offsetTop || 0) - 130
+    box.scrollTo({ top: top > 0 ? top : 0, behavior: 'smooth' })
+  } else if (typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 }
 
@@ -154,6 +314,23 @@ function gradeColor(key) {
   const g = grades.value.find((x) => x.key === key)
   return g ? g.color : null
 }
+
+/** 撤去全部筛选：无关键词时连结果一并收起 */
+function resetFilters() {
+  filterCategory.value = 'all'
+  filterGrade.value = 'all'
+  gradeAbove.value = false
+  if (keyword.value.trim()) {
+    rerunIfSearched()
+  } else {
+    searched.value = false
+    results.value = []
+    total.value = 0
+  }
+}
+
+/** 关键词高亮（已转义，供 v-html 用） */
+const hl = (text) => highlight(text, keyword.value)
 
 /* ------------------------------ 五行相生环 ------------------------------ */
 // 相生次序：木生火 → 火生土 → 土生金 → 金生水 → 水生木（顺时针排布）
@@ -371,7 +548,28 @@ function toTop() {
 
 let io = null
 
+/** 点击搜索栏之外 → 收起联想面板 */
+function onDocMouseDown(e) {
+  if (searchWrap.value && !searchWrap.value.contains(e.target)) closePanel()
+}
+
+/** Ctrl/⌘ + K 唤起搜索 */
+function onGlobalKey(e) {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault()
+    const el = searchInput.value
+    if (el) {
+      el.focus()
+      el.select()
+    }
+    openPanel()
+  }
+}
+
 onMounted(async () => {
+  document.addEventListener('mousedown', onDocMouseDown)
+  window.addEventListener('keydown', onGlobalKey)
+
   // 拉取各模块数据（接口失败不阻塞页面）
   homeApi.getNav().then((l) => { if (l && l.length) navItems.value = l }).catch(() => {})
   homeApi.getHotKeywords().then((l) => { if (l) hotKeywords.value = l }).catch(() => {})
@@ -402,6 +600,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (io) io.disconnect()
+  document.removeEventListener('mousedown', onDocMouseDown)
+  window.removeEventListener('keydown', onGlobalKey)
+  cancelSuggest()
+  clearTimeout(dqMsgTimer)
+  clearTimeout(mkMsgTimer)
 })
 </script>
 
@@ -430,6 +633,11 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="nav-right">
+        <!-- 后台管理系统入口 -->
+        <button class="admin-btn" title="后台管理系统" @click="emit('to-admin')">
+          后 台<small>admin</small>
+        </button>
+
         <!-- 迷你五行换色器 -->
         <div class="wx-mini">
           <span
@@ -470,31 +678,127 @@ onBeforeUnmount(() => {
         </svg>
 
         <div class="greeting">{{ greeting }}</div>
-        <h1 class="hero-title">雾山寻物</h1>
+        <h1 class="hero-title">雾山</h1>
         <p class="hero-sub">五行归位 · 万象可寻</p>
 
-        <div class="search-bar">
-          <input
-            v-model="keyword"
-            placeholder="入山搜物…阵法、秘录、灵草，皆可寻也"
-            autocomplete="off"
-            @keydown.enter="doSearch()"
-          />
-          <button class="search-btn" :disabled="searching" @click="doSearch()">
-            {{ searching ? '寻…' : '寻' }}
-          </button>
+        <!-- 搜索栏：联想下拉 + 搜索历史 + 一键清空 -->
+        <div class="search-bar" ref="searchWrap">
+          <div class="sb-field" :class="{ 'is-open': suggestOpen }">
+            <svg class="sb-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+              <line x1="15.2" y1="15.2" x2="20.5" y2="20.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+
+            <input
+              ref="searchInput"
+              v-model="keyword"
+              class="sb-input"
+              type="text"
+              placeholder="入山搜物…阵法、秘录、灵草，皆可寻也"
+              autocomplete="off"
+              spellcheck="false"
+              role="combobox"
+              aria-label="山中寻物"
+              :aria-expanded="suggestOpen"
+              aria-controls="sb-panel"
+              @input="onInput"
+              @compositionstart="composing = true"
+              @compositionend="onCompositionEnd"
+              @focus="onFocus"
+              @keydown="onKeydown"
+            />
+
+            <span v-if="suggestLoading" class="sb-loading" aria-hidden="true"></span>
+            <button
+              v-else-if="keyword"
+              class="sb-clear"
+              type="button"
+              title="清空"
+              aria-label="清空"
+              @click="clearKeyword"
+            >×</button>
+
+            <button class="search-btn" type="button" :disabled="searching" @click="doSearch()">
+              {{ searching ? '寻…' : '寻' }}
+            </button>
+          </div>
+
+          <!-- 联想 / 历史 / 热搜下拉面板 -->
+          <Transition name="sbpop">
+            <div v-if="suggestOpen" id="sb-panel" class="sb-panel">
+              <!-- 联想词 -->
+              <template v-if="suggestions.length">
+                <div class="sb-panel-head"><span>联 想</span></div>
+                <div
+                  v-for="(s, i) in suggestions"
+                  :key="'sg-' + s"
+                  class="sb-opt"
+                  :class="{ on: suggestIndex === i }"
+                  @mouseenter="suggestIndex = i"
+                  @mousedown.prevent="pickOption({ type: 'suggest', text: s })"
+                >
+                  <span class="sb-opt-icon">寻</span>
+                  <span class="sb-opt-text" v-html="hl(s)"></span>
+                </div>
+              </template>
+
+              <!-- 搜索历史 -->
+              <template v-else-if="history.length">
+                <div class="sb-panel-head">
+                  <span>近 日 所 寻</span>
+                  <a href="#" @mousedown.prevent="clearAllHistory">清空</a>
+                </div>
+                <div
+                  v-for="(h, i) in history"
+                  :key="'hs-' + h"
+                  class="sb-opt"
+                  :class="{ on: suggestIndex === i }"
+                  @mouseenter="suggestIndex = i"
+                  @mousedown.prevent="pickOption({ type: 'history', text: h })"
+                >
+                  <span class="sb-opt-icon">迹</span>
+                  <span class="sb-opt-text">{{ h }}</span>
+                  <span
+                    class="sb-opt-del"
+                    title="删去此条"
+                    @mousedown.stop.prevent="removeOneHistory(h)"
+                  >×</span>
+                </div>
+              </template>
+
+              <!-- 无输入无历史：推热搜 -->
+              <template v-else>
+                <div class="sb-panel-head"><span>山 中 热 搜</span></div>
+                <div class="sb-hot-grid">
+                  <a
+                    v-for="(h, i) in hotKeywords.slice(0, 6)"
+                    :key="'ph-' + h.keyword"
+                    href="#"
+                    class="sb-hot-item"
+                    :class="'t-' + h.element"
+                    @mousedown.prevent="pickOption({ type: 'suggest', text: h.keyword })"
+                  >
+                    <i class="sb-hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</i>{{ h.keyword }}
+                  </a>
+                </div>
+              </template>
+
+              <div v-if="suggestLoading && !suggestions.length" class="sb-panel-tip">寻 …</div>
+              <div class="sb-panel-foot">↑ ↓ 择词 · Enter 起寻 · Esc 收起 · Ctrl+K 唤起</div>
+            </div>
+          </Transition>
         </div>
 
         <div class="hot" v-if="hotKeywords.length">
           <span class="hot-label">山 中 热 搜：</span>
           <a
-            v-for="h in hotKeywords"
+            v-for="(h, i) in hotKeywords"
             :key="h.keyword"
             href="#"
             class="hot-tag"
             :class="'t-' + h.element"
             @click.prevent="doSearch(h.keyword)"
-          >{{ h.keyword }}</a>
+          ><i class="hot-rank" :class="{ top: i < 3 }">{{ i + 1 }}</i>{{ h.keyword }}</a>
         </div>
 
         <!-- 分级分类筛选：一级分类含二级子类（虚线为二级），品阶支持「及以上」分级 -->
@@ -525,6 +829,7 @@ onBeforeUnmount(() => {
               @click="pickGrade(g.key)"
             >{{ g.label }}</span>
             <span class="f-above" :class="{ on: gradeAbove }" @click="toggleAbove">及以上</span>
+            <span v-if="hasFilter" class="f-chip reset" @click="resetFilters">撤 去 筛 选</span>
           </div>
         </div>
       </section>
@@ -544,15 +849,16 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <!-- 搜索结果 -->
-      <section class="results reveal" v-if="searched">
+      <!-- 搜索结果（动态出现，不走滚动渐显：否则观察器观察不到、结果会停在 opacity:0） -->
+      <section class="results" v-if="searched" ref="resultsEl">
         <div class="results-head">
           {{ keyword ? `「${keyword}」之 所 寻` : '山 中 寻 物' }} · 共 {{ total }} 条
+          <small v-if="elapsed">· 用时 {{ elapsed.toFixed(2) }} 秒</small>
         </div>
         <div v-if="results.length" class="results-list">
           <div v-for="r in results" :key="r.id" class="result-item">
             <span class="r-tag" :class="'t-' + r.element">{{ findElement(r.element).label }}</span>
-            <span class="r-title">{{ r.title }}</span>
+            <span class="r-title" v-html="hl(r.title)"></span>
             <span class="r-meta" v-if="r.categoryLabel || r.gradeLabel">
               <span class="r-cat" v-if="r.categoryLabel">{{ r.categoryLabel }}</span>
               <span
@@ -561,7 +867,7 @@ onBeforeUnmount(() => {
                 :style="gradeColor(r.grade) ? { color: gradeColor(r.grade), borderColor: gradeColor(r.grade) } : null"
               >{{ r.gradeLabel }}</span>
             </span>
-            <span class="r-desc">{{ r.desc }}</span>
+            <span class="r-desc" v-html="hl(r.desc)"></span>
           </div>
           <!-- 分页加载更多 -->
           <div class="more-wrap" v-if="results.length < total">
@@ -569,8 +875,25 @@ onBeforeUnmount(() => {
               {{ loadingMore ? '寻 …' : '再 寻 十 条' }}
             </button>
           </div>
+          <div v-else-if="total" class="more-wrap"><span class="more-end">— 山 中 已 尽 —</span></div>
         </div>
-        <div v-else class="results-empty">山中无此物，换个说法再寻。</div>
+        <div v-else class="results-empty">
+          <p>山中无此物，换个说法再寻。</p>
+          <p class="re-tip" v-if="hasFilter">
+            或<span class="re-link" @click="resetFilters">撤去筛选</span>再看看。
+          </p>
+          <div class="re-hot" v-if="hotKeywords.length">
+            <span class="re-hot-label">不妨试试：</span>
+            <a
+              v-for="h in hotKeywords.slice(0, 5)"
+              :key="'eh-' + h.keyword"
+              href="#"
+              class="hot-tag"
+              :class="'t-' + h.element"
+              @click.prevent="doSearch(h.keyword)"
+            >{{ h.keyword }}</a>
+          </div>
+        </div>
       </section>
 
       <!-- 五行相生环（观山） -->
@@ -905,6 +1228,33 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
 }
+/* 后台管理系统入口按钮 */
+.admin-btn {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: 3px;
+  line-height: 1.1;
+  color: var(--paper);
+  background: rgba(236, 228, 210, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.admin-btn small {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 1px;
+  opacity: 0.55;
+  margin-top: 2px;
+}
+.admin-btn:hover {
+  color: #fff8ee;
+  background: var(--accent);
+  border-color: #9c2418;
+  box-shadow: 0 0 14px rgba(232, 65, 43, 0.4);
+}
 /* 迷你五行换色器（与登录页 .wx 同色） */
 .wx-mini {
   display: flex;
@@ -1066,35 +1416,94 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
+/* ---------- 搜索栏（联想 / 历史 / 清空） ---------- */
 .search-bar {
+  position: relative;
   margin: 34px auto 0;
-  max-width: 620px;
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
+  max-width: 680px;
+  text-align: left;
 }
-.search-bar input {
+.sb-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(18, 18, 16, 0.74);
+  transition: 0.25s;
+}
+.sb-field:hover {
+  border-color: rgba(236, 228, 210, 0.28);
+}
+.sb-field:focus-within,
+.sb-field.is-open {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px rgba(232, 65, 43, 0.22), inset 0 0 30px rgba(232, 65, 43, 0.05);
+}
+.sb-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+.sb-field:focus-within .sb-icon,
+.sb-field.is-open .sb-icon {
+  color: var(--accent);
+}
+.sb-input {
   flex: 1;
-  padding: 14px 20px;
+  min-width: 0;
+  padding: 12px 0;
   font-family: inherit;
   font-size: 17px;
   letter-spacing: 2px;
   color: var(--paper);
-  background: rgba(18, 18, 16, 0.72);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  background: transparent;
+  border: none;
   outline: none;
-  transition: 0.25s;
 }
-.search-bar input::placeholder {
+.sb-input::placeholder {
   color: rgba(236, 228, 210, 0.3);
 }
-.search-bar input:focus {
+/* 清空按钮 */
+.sb-clear {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  background: rgba(236, 228, 210, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.sb-clear:hover {
+  color: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 0 16px rgba(232, 65, 43, 0.25), inset 0 0 30px rgba(232, 65, 43, 0.05);
+  transform: rotate(90deg);
+}
+/* 联想加载中转圈 */
+.sb-loading {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(236, 228, 210, 0.2);
+  border-top-color: var(--accent);
+  animation: sbspin 0.7s linear infinite;
+}
+@keyframes sbspin {
+  to { transform: rotate(360deg); }
 }
 .search-btn {
-  padding: 14px 30px;
+  flex-shrink: 0;
+  padding: 12px 28px;
   font-family: inherit;
   font-size: 19px;
   letter-spacing: 4px;
@@ -1113,6 +1522,162 @@ onBeforeUnmount(() => {
 .search-btn:disabled {
   opacity: 0.85;
   cursor: default;
+}
+
+/* ---------- 联想 / 历史下拉面板 ---------- */
+.sb-panel {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 8px 0 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(14, 13, 12, 0.97);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+.sb-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px 8px;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--muted);
+  border-bottom: 1px dashed rgba(236, 228, 210, 0.12);
+}
+.sb-panel-head a {
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 1px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sb-panel-head a:hover {
+  color: var(--accent);
+}
+.sb-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--paper);
+  cursor: pointer;
+}
+.sb-opt.on {
+  background: rgba(232, 65, 43, 0.1);
+}
+.sb-opt-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.sb-opt-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-opt-del {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.sb-opt-del:hover {
+  color: var(--accent);
+}
+.sb-hot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 4px;
+}
+.sb-hot-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--paper);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(236, 228, 210, 0.04);
+  cursor: pointer;
+  transition: 0.2s;
+}
+.sb-hot-item:hover {
+  transform: translateY(-2px);
+  border-color: currentColor;
+}
+.sb-hot-rank {
+  font-style: normal;
+  font-size: 11px;
+  width: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+.sb-hot-rank.top {
+  color: var(--accent);
+}
+.sb-hot-item.t-jin { color: #e8c372; }
+.sb-hot-item.t-mu { color: #4caf6e; }
+.sb-hot-item.t-shui { color: #3a8fd0; }
+.sb-hot-item.t-huo { color: #e8412b; }
+.sb-hot-item.t-tu { color: #c8923a; }
+.sb-hot-item.t-feng { color: #7fd8cf; }
+.sb-hot-item.t-lei { color: #9d7bf0; }
+.sb-hot-item.t-dian { color: #f2e34d; }
+.sb-hot-item.t-taiji { color: #d8d2c2; }
+.sb-hot-item.t-yinyang { color: #98a4b0; }
+.sb-panel-tip {
+  padding: 10px 16px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--muted);
+}
+.sb-panel-foot {
+  margin-top: 6px;
+  padding: 8px 16px 2px;
+  text-align: right;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(236, 228, 210, 0.32);
+  border-top: 1px dashed rgba(236, 228, 210, 0.1);
+}
+.sbpop-enter-active,
+.sbpop-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.sbpop-enter-from,
+.sbpop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+/* 高亮命中词（v-html 内容需用 :deep 穿透 scoped） */
+.sb-panel :deep(mark),
+.results-list :deep(mark) {
+  padding: 0 1px;
+  border-radius: 2px;
+  color: var(--accent);
+  background: rgba(232, 65, 43, 0.2);
 }
 
 .hot {
@@ -1152,6 +1717,15 @@ onBeforeUnmount(() => {
 .hot-tag.t-dian { color: #f2e34d; }
 .hot-tag.t-taiji { color: #d8d2c2; }
 .hot-tag.t-yinyang { color: #98a4b0; }
+.hot-rank {
+  font-style: normal;
+  font-size: 11px;
+  margin-right: 6px;
+  color: rgba(236, 228, 210, 0.4);
+}
+.hot-rank.top {
+  color: var(--accent);
+}
 
 /* ---------- 分级分类筛选 ---------- */
 .filters {
@@ -1220,6 +1794,15 @@ onBeforeUnmount(() => {
   border-color: #f2e34d;
   box-shadow: 0 0 10px rgba(242, 227, 77, 0.2);
 }
+/* 撤去筛选 */
+.f-chip.reset {
+  border-style: dashed;
+  color: var(--muted);
+}
+.f-chip.reset:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 /* ---------- 五行卡片 ---------- */
 .cards {
@@ -1285,6 +1868,11 @@ onBeforeUnmount(() => {
   margin-top: 48px;
   width: 100%;
   max-width: 680px;
+  animation: riseIn 0.5s ease both;
+}
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
 }
 .results-head {
   font-size: 15px;
@@ -1372,6 +1960,37 @@ onBeforeUnmount(() => {
   font-size: 14px;
   letter-spacing: 3px;
   color: var(--muted);
+}
+.results-empty p {
+  margin: 0;
+}
+.re-tip {
+  margin-top: 8px !important;
+  font-size: 13px;
+}
+.re-link {
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0 4px;
+  border-bottom: 1px dashed currentColor;
+}
+.re-hot {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.re-hot-label {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(236, 228, 210, 0.45);
+}
+.more-end {
+  font-size: 12px;
+  letter-spacing: 4px;
+  color: rgba(236, 228, 210, 0.3);
 }
 /* 分页加载更多 */
 .more-wrap {
@@ -1820,6 +2439,21 @@ onBeforeUnmount(() => {
   .hero-title {
     font-size: 42px;
     letter-spacing: 8px;
+  }
+  .search-bar {
+    max-width: 100%;
+  }
+  .sb-input {
+    font-size: 15px;
+    letter-spacing: 1px;
+  }
+  .search-btn {
+    padding: 12px 18px;
+    font-size: 17px;
+    letter-spacing: 2px;
+  }
+  .sb-panel {
+    max-height: 280px;
   }
   .r-desc,
   .ds-quote {

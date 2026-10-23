@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 藏经阁灵根实体，对应表 wushan_spirit_root。
+ * 宝库灵根实体，对应表 wushan_spirit_root。
  */
 @Data
 @TableName("wushan_spirit_root")

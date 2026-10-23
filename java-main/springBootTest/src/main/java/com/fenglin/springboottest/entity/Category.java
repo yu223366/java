@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 藏经分类实体，对应表 wushan_category。
+ * 宝库分类实体，对应表 wushan_category。
  * parent_id 自关联实现分级：一级（功法 / 心得 / 修炼资源）→ 二级（心法 / 身法 / …）。
  */
 @Data

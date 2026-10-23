@@ -3,7 +3,7 @@ package com.fenglin.springboottest.controller.dto;
 import lombok.Data;
 
 /**
- * 藏经阁秘境 VO（秘境页签）。
+ * 宝库秘境 VO（秘境页签）。
  * 字段与前端契约一致：{ id, name, element, grade, gradeLabel, layers, desc }。
  */
 @Data

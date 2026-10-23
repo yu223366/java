@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fenglin.springboottest.entity.Category;
 import org.apache.ibatis.annotations.Mapper;
 
-/** 藏经分类 Mapper。 */
+/** 宝库分类 Mapper。 */
 @Mapper
 public interface CategoryMapper extends BaseMapper<Category> {
 }

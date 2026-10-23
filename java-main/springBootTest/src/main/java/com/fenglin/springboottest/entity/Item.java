@@ -10,7 +10,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 藏经条目实体，对应表 wushan_item —— 首页搜索的对象。
+ * 宝库条目实体，对应表 wushan_item —— 首页搜索的对象。
  */
 @Data
 @TableName("wushan_item")

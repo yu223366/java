@@ -1,6 +1,6 @@
 /**
  * ============================================================
- *  藏经阁接口层 —— 功法 / 心得 / 修炼资源 / 灵根 / 秘境
+ *  宝库接口层 —— 功法 / 心得 / 修炼资源 / 灵根 / 秘境
  * ============================================================
  *  约定（与 auth.js 一致）：
  *    1. 所有接口均返回 Promise，成功 resolve 业务数据，失败 reject(new Error(中文文案))
@@ -22,6 +22,8 @@
  */
 import { BASE_URL, USE_MOCK, tokenStore } from './auth'
 import { CODEX_ITEMS, SPIRIT_ROOTS, REALMS } from '../constants/codex'
+// mock 模式下改走本地可持久化的宝库数据源：后台管理系统的增删改，前台立刻可见
+import * as treasury from '../utils/treasuryStore'
 
 const TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT || 12000)
 
@@ -67,11 +69,15 @@ async function request(path, { method = 'GET', data, query } = {}) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function filterItems(list, { element, grade, q } = {}) {
+  const kw = q ? String(q).trim() : ''
   return list.filter(
     (it) =>
       (!element || element === 'all' || it.element === element) &&
       (!grade || grade === 'all' || it.grade === grade) &&
-      (!q || it.title.includes(q) || it.name.includes(q) || (it.desc || '').includes(q))
+      (!kw ||
+        String(it.title || '').includes(kw) ||
+        String(it.name || '').includes(kw) ||
+        String(it.desc || '').includes(kw))
   )
 }
 
@@ -85,7 +91,7 @@ export const codexApi = {
   async getItems(filters = {}) {
     if (USE_MOCK) {
       await sleep(240)
-      let list = CODEX_ITEMS
+      let list = treasury.getList('items')
       if (filters.category && filters.category !== 'all') {
         list = list.filter((it) => it.category === filters.category)
       }
@@ -102,7 +108,7 @@ export const codexApi = {
   async getSpiritRoots(filters = {}) {
     if (USE_MOCK) {
       await sleep(200)
-      const items = filterItems(SPIRIT_ROOTS, filters)
+      const items = filterItems(treasury.getList('roots'), filters)
       return { total: items.length, items }
     }
     return request('/codex/spirit-roots', { query: filters })
@@ -115,7 +121,7 @@ export const codexApi = {
   async getRealms(filters = {}) {
     if (USE_MOCK) {
       await sleep(200)
-      const items = filterItems(REALMS, filters)
+      const items = filterItems(treasury.getList('realms'), filters)
       return { total: items.length, items }
     }
     return request('/codex/realms', { query: filters })

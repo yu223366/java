@@ -397,9 +397,13 @@ CREATE TABLE `wushan_nav`  (
 -- Records of wushan_nav
 -- ----------------------------
 INSERT INTO `wushan_nav` VALUES (1, 'guanshan', '观山', 'scenery', 1, 1);
-INSERT INTO `wushan_nav` VALUES (2, 'cangjing', '藏经', 'codex', 2, 1);
+-- 2026-10-23 改名：藏经 → 宝库（前端导航 key 同步为 baoku）
+INSERT INTO `wushan_nav` VALUES (2, 'baoku', '宝库', 'treasury', 2, 1);
 INSERT INTO `wushan_nav` VALUES (3, 'lundao', '论道', 'discourse', 3, 1);
 INSERT INTO `wushan_nav` VALUES (4, 'shiji', '市集', 'market', 4, 1);
+
+-- 若库已建好、跑的是旧种子，执行下面这条做在线改名（无需重建表）：
+-- UPDATE `wushan_nav` SET `nav_key` = 'baoku', `label` = '宝库', `en` = 'treasury' WHERE `nav_key` = 'cangjing';
 
 -- ----------------------------
 -- Table structure for wushan_realm

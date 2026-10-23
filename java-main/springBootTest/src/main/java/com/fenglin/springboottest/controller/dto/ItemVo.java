@@ -4,7 +4,7 @@ import lombok.Data;
 
 /**
  * 条目展示 VO —— 字段名对齐前端契约：
- * HomePanel 用 { id, title, desc, element }，藏经阁另可读 category / grade。
+ * HomePanel 用 { id, title, desc, element }，宝库另可读 category / grade。
  */
 @Data
 public class ItemVo {
