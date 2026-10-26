@@ -34,6 +34,32 @@ export const tokenStore = {
   clear: () => typeof localStorage !== 'undefined' && localStorage.removeItem(TOKEN_KEY)
 }
 
+/* --------------------- 当前会话（名号 + 权限）存取 --------------------- */
+// role：0=管理员(执事) 1=普通山友；首页后台入口与后台登录资格都以此为凭
+const SESSION_KEY = 'wushan_session'
+export const sessionStore = {
+  get() {
+    if (typeof localStorage === 'undefined') return null
+    try {
+      const raw = localStorage.getItem(SESSION_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch (e) {
+      return null
+    }
+  },
+  set(s) {
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: s.username || '', role: Number(s.role) === 0 ? 0 : 1 }))
+    } catch (e) {
+      /* 忽略：隐私模式 */
+    }
+  },
+  clear() {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(SESSION_KEY)
+  }
+}
+
 /* ------------------------------ 基础请求 ------------------------------ */
 async function request(path, { method = 'GET', data, query } = {}) {
   let url = BASE_URL + path
@@ -83,11 +109,14 @@ const mock = {
   },
   async register(payload) {
     await sleep(760)
-    return { userId: 'u_' + Math.random().toString(36).slice(2, 10), ...payload, token: 'mock-token-' + Date.now() }
+    // 注册即普通山友：role 恒为 1
+    return { userId: 'u_' + Math.random().toString(36).slice(2, 10), ...payload, token: 'mock-token-' + Date.now(), role: 1 }
   },
   async login({ username }) {
     await sleep(700)
-    return { token: 'mock-token-' + Date.now(), username }
+    // mock 约定：名号 admin 视为执事（role=0），其余皆为山友（role=1）
+    const role = String(username || '').trim().toLowerCase() === 'admin' ? 0 : 1
+    return { token: 'mock-token-' + Date.now(), username, role }
   }
 }
 
@@ -114,15 +143,17 @@ export const authApi = {
   },
 
   /** 注册（提交前端上已做完整校验，此处为二次校验） */
-  register(payload) {
-    if (USE_MOCK) return mock.register(payload)
-    return request('/auth/register', { method: 'POST', data: payload })
+  async register(payload) {
+    const data = USE_MOCK ? await mock.register(payload) : await request('/auth/register', { method: 'POST', data: payload })
+    sessionStore.set({ username: data.username || payload.username, role: data.role })
+    return data
   },
 
   /** 登录（登录页预留，替换 LoginPanel 中的假延时即可） */
-  login(payload) {
-    if (USE_MOCK) return mock.login(payload)
-    return request('/auth/login', { method: 'POST', data: payload })
+  async login(payload) {
+    const data = USE_MOCK ? await mock.login(payload) : await request('/auth/login', { method: 'POST', data: payload })
+    sessionStore.set({ username: data.username || payload.username, role: data.role })
+    return data
   }
 }
 

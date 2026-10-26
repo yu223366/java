@@ -36,5 +36,7 @@ if not exist node_modules (
 )
 
 echo [启动] 前端开发服务器启动中...
+rem 清空旧日志：否则上一次的报错会混进本次排查，误报「编译失败」
+if exist "_vite.log" del /f /q "_vite.log" >nul 2>&1
 start "wushan-frontend" /min cmd /c "npm run dev > _vite.log 2>&1"
 echo [完成] 前端已在后台启动，日志：wushan-login-vue\_vite.log

@@ -12,7 +12,9 @@ import { getHistory, addHistory, removeHistory, clearHistory } from '../utils/se
 import { highlight } from '../utils/highlight'
 
 const props = defineProps({
-  username: { type: String, default: '' }
+  username: { type: String, default: '' },
+  // 权限：0=执事（显示后台入口） 1=山友（不显示，也无法登录后台）
+  role: { type: Number, default: 1 }
 })
 const emit = defineEmits(['select', 'logout', 'nav', 'to-admin'])
 
@@ -633,8 +635,8 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="nav-right">
-        <!-- 后台管理系统入口 -->
-        <button class="admin-btn" title="后台管理系统" @click="emit('to-admin')">
+        <!-- 后台管理系统入口：仅执事（role=0）可见 -->
+        <button v-if="role === 0" class="admin-btn" title="后台管理系统" @click="emit('to-admin')">
           后 台<small>admin</small>
         </button>
 

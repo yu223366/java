@@ -50,11 +50,13 @@ async function submit() {
     // 预留接口：接后端时直接走真实登录（mock 模式下仍为本地模拟）
     const res = await authApi.login({ username: user.value.trim(), password: pass.value })
     if (res && res.token && rem.value) tokenStore.set(res.token)
+    // 权限：0=执事（可见后台入口） 1=山友；缺省按山友处理
+    const role = res && Number(res.role) === 0 ? 0 : 1
     setTimeout(() => {
       loading.value = false
       loggedIn.value = true
-      // 落印动画展示约 1.4s 后，携名号进入首页
-      setTimeout(() => emit('to-home', user.value.trim()), 1400)
+      // 落印动画展示约 1.4s 后，携名号与权限进入首页
+      setTimeout(() => emit('to-home', user.value.trim(), role), 1400)
     }, 850)
   } catch (e) {
     loading.value = false

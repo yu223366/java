@@ -62,6 +62,9 @@ DELETE /api/admin/treasury/{items|roots|realms}/{id}     # 软删除：status �
 - 除 `/api/admin/login` 外全部校验 `Authorization: Bearer <token>`（TokenUtil 解析，非法抛 BizException 401）。
 - 后台删除是**软删**，前台立即可见；要彻底清除改 `AdminServiceImpl.remove` 为 `deleteById`。
 
+9. **前端「假就绪」陷阱（2026-10-26 踩过）**：Vite 即使模块解析失败（`Failed to resolve import`）也照常监听 5173，只查端口会误判为启动成功，页面却一片空白。现 一键启动.cmd 在就绪检查后会再扫一遍 `_vite.log`，命中 `Failed to resolve import` / `Internal server error` / `Pre-transform error` 就打印 `[异常]`；启动-前端.cmd / 启动-后端.cmd 每次启动前会先删掉旧日志，避免上次报错误报。
+10. **后台六个文件曾整体缺失（2026-10-26 修复）**：`App.vue` 引用了 `AdminLoginPanel.vue`、`AdminPanel.vue`、`api/admin.js`、`utils/treasuryStore.js`、`utils/searchHistory.js`、`utils/highlight.js`，但文件没落盘，Vite 直接 500。现已补齐；mock 演示账号 **admin / admin123**，数据落在 `wushan:treasury:v1`。**后端 AdminController.java 尚未实现**，真实模式（VITE_USE_MOCK=false）下 `/api/admin/*` 会 404，后台只在 mock 模式可用。
+
 ## 手动启动命令（等价于脚本）
 
 ```bash

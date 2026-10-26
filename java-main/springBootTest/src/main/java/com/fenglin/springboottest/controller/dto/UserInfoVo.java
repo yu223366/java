@@ -15,4 +15,7 @@ public class UserInfoVo {
 
     /** 昵称（当前与名号一致） */
     private String nickname;
+
+    /** 权限：0=管理员(执事) 1=普通山友 */
+    private Integer role;
 }

@@ -21,6 +21,7 @@ const bg = ref(null)
 // login | register | home | codex | admin-login | admin
 const view = ref('login')
 const username = ref('') // 登录成功的名号，带入首页
+const role = ref(1) // 当前用户权限：0=执事（可见后台入口） 1=山友
 const adminName = ref('') // 后台登录成功的执事名号，带入后台
 
 // 五行被点击：更新主题色与火星颜色（火元素使用默认红，其余使用所选色）
@@ -34,15 +35,17 @@ function onBurst(p) {
   if (bg.value) bg.value.burst(p.x, p.y, p.n, p.spread)
 }
 
-// 登录成功：记录名号并跳转首页
-function onEnterHome(name) {
+// 登录成功：记录名号与权限并跳转首页
+function onEnterHome(name, r) {
   username.value = name
+  role.value = Number(r) === 0 ? 0 : 1
   view.value = 'home'
 }
 
 // 首页「出山」：回到登录页
 function onLogout() {
   username.value = ''
+  role.value = 1
   view.value = 'login'
 }
 
@@ -52,8 +55,9 @@ function onNav(item) {
   if (item && (item.key === 'baoku' || item.key === 'cangjing')) view.value = 'codex'
 }
 
-// 首页导航栏「后台」：已持执事令牌就直接回后台（刷新页面不必重新登录），否则去登录页
+// 首页导航栏「后台」：仅执事（role=0）可见可入；已持执事令牌就直接回后台，否则去登录页
 function onGoAdminLogin() {
+  if (role.value !== 0) return // 山友无权入内（按钮本就不渲染，此为兜底）
   if (adminApi.isLogin()) {
     adminName.value = adminApi.currentName()
     view.value = 'admin'
@@ -110,6 +114,7 @@ const hint = computed(() =>
           v-else-if="view === 'home'"
           key="home"
           :username="username"
+          :role="role"
           @select="onSelect"
           @logout="onLogout"
           @nav="onNav"

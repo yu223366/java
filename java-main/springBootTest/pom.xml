@@ -45,13 +45,6 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- 密码加密（BCrypt，零 Spring Security 依赖） -->
-		<dependency>
-			<groupId>org.mindrot</groupId>
-			<artifactId>jbcrypt</artifactId>
-			<version>0.4</version>
-		</dependency>
-
 		<!-- Lombok 简化实体 / VO 样板代码 -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>

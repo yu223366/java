@@ -9,4 +9,7 @@ public class RegisterVo {
     private String token;
     private String username;
     private String element;
+
+    /** 权限：注册即普通山友，恒为 1 */
+    private Integer role;
 }

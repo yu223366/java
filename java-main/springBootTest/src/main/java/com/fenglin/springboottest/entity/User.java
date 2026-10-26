@@ -22,7 +22,7 @@ public class User implements Serializable {
     /** 名号 */
     private String username;
 
-    /** 暗语（BCrypt 密文） */
+    /** 暗语（明文存储，按需求不加密） */
     private String password;
 
     /** 本命元素 key（正五行 + 衍生）：jin / mu / shui / huo / tu / feng / lei / dian / taiji / yinyang */
@@ -39,6 +39,9 @@ public class User implements Serializable {
 
     /** 状态：1 正常 / 0 禁用 */
     private Integer status;
+
+    /** 权限：0=管理员(执事) 1=普通山友（注册默认 1） */
+    private Integer role;
 
     /** 创建时间 */
     @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)

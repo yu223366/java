@@ -44,6 +44,8 @@ if exist "%MYSQL%" (
 )
 
 echo [启动] 后端编译启动中（target 被删会自动重编译，约 30 秒）...
+rem 清空旧日志：否则上一次的报错会混进本次排查
+if exist "_run.log" del /f /q "_run.log" >nul 2>&1
 start "wushan-backend" /min cmd /c "mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=8080 > _run.log 2>&1"
 echo [完成] 后端已在后台启动，日志：springBootTest\_run.log
 exit /b 0

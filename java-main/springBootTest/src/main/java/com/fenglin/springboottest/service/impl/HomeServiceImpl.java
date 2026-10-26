@@ -84,6 +84,7 @@ public class HomeServiceImpl implements HomeService {
         vo.setUsername(user.getUsername());
         vo.setNickname(user.getUsername());
         vo.setElement(user.getElement());
+        vo.setRole(user.getRole() == null ? 1 : user.getRole());
         return vo;
     }
 

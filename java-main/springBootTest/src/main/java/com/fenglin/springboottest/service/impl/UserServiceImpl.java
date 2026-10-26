@@ -10,7 +10,6 @@ import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.mapper.UserMapper;
 import com.fenglin.springboottest.service.CaptchaService;
 import com.fenglin.springboottest.service.UserService;
-import com.fenglin.springboottest.util.SecureUtil;
 import com.fenglin.springboottest.util.TokenUtil;
 import org.springframework.stereotype.Service;
 
@@ -79,15 +78,16 @@ public class UserServiceImpl implements UserService {
             throw new BizException("此名号已有人立契，请另择一名");
         }
 
-        // 4) 入库
+        // 4) 入库（暗语按需求明文存储；注册即普通山友 role=1）
         User user = new User();
         user.setUsername(username);
-        user.setPassword(SecureUtil.hash(password));
+        user.setPassword(password);
         user.setElement(trim(req.getElement()));
         user.setElementLabel(trim(req.getElementLabel()));
         user.setAgreed(true);
         user.setAgreedAt(LocalDateTime.now());
         user.setStatus(1);
+        user.setRole(1);
         userMapper.insert(user);
 
         // 5) 消费一次性图形符印
@@ -99,6 +99,7 @@ public class UserServiceImpl implements UserService {
         vo.setToken(TokenUtil.generate(user.getId(), username));
         vo.setUsername(username);
         vo.setElement(user.getElement());
+        vo.setRole(user.getRole());
         return vo;
     }
 
@@ -115,12 +116,14 @@ public class UserServiceImpl implements UserService {
         if (user.getStatus() != null && user.getStatus() == 0) {
             throw new BizException("山籍已被封禁");
         }
-        if (!SecureUtil.matches(password, user.getPassword())) {
+        // 明文比对（按需求不加密）
+        if (!password.equals(user.getPassword())) {
             throw new BizException("暗语有误");
         }
         LoginVo vo = new LoginVo();
         vo.setToken(TokenUtil.generate(user.getId(), user.getUsername()));
         vo.setUsername(user.getUsername());
+        vo.setRole(user.getRole() == null ? 1 : user.getRole());
         return vo;
     }
 

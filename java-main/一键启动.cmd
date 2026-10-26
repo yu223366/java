@@ -44,5 +44,19 @@ if errorlevel 1 (
     echo [就绪] 前端  http://localhost:5173
     start "" "http://localhost:5173"
 )
+rem ------------------------------------------------------------
+rem  前端「假就绪」排查（2026-10-26 新增）：
+rem  Vite 即使模块解析失败（Failed to resolve import）也会照常监听
+rem  5173，脚本只查端口会误报「就绪」，页面却一片空白。
+rem  这里再扫一遍 _vite.log，命中典型编译错误就显式告警。
+rem ------------------------------------------------------------
+set "VITE_LOG=%~dp0java-main\wushan-login-vue\_vite.log"
+if exist "%VITE_LOG%" (
+    findstr /i /c:"Failed to resolve import" /c:"Internal server error" /c:"Pre-transform error" "%VITE_LOG%" >nul
+    if not errorlevel 1 (
+        echo [异常] 前端已监听端口，但页面编译报错（多为缺文件或路径写错）。
+        echo [异常] 详见 wushan-login-vue\_vite.log
+    )
+)
 echo.
 pause
