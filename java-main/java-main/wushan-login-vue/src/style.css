@@ -24,3 +24,12 @@ body {
   overflow: hidden;
   background: radial-gradient(130% 120% at 50% 12%, #16201d 0%, var(--ink2) 45%, var(--ink) 100%);
 }
+
+/* 搜索命中高亮（utils/highlight.js 产出 <mark class="hl">） */
+mark.hl {
+  background: transparent;
+  color: var(--accent, #e8412b);
+  text-shadow: 0 0 10px rgba(232, 65, 43, 0.6);
+  border-bottom: 1px solid var(--accent, #e8412b);
+  padding: 0 1px;
+}

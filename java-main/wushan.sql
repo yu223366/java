@@ -586,21 +586,25 @@ CREATE TABLE `wushan_user`  (
   `agreed` tinyint(1) NULL DEFAULT 0 COMMENT '鏄?惁鍏佽?灞辫?锛?=鏄?0=鍚',
   `agreed_at` datetime NULL DEFAULT NULL COMMENT '鍏佽?鏃堕棿',
   `status` tinyint NULL DEFAULT 1 COMMENT '鐘舵?锛?=姝ｅ父 0=绂佺敤',
+  `role` tinyint NOT NULL DEFAULT 1 COMMENT '权限：0=管理员(执事) 1=普通山友',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '鍒涘缓鏃堕棿',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '鏇存柊鏃堕棿',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_username`(`username` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '闆惧北灞辩睄锛堢敤鎴疯〃锛' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '闆惧北灞辩睄锛堢敤鎴疯〃锛' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of wushan_user
 -- ----------------------------
-INSERT INTO `wushan_user` VALUES (1, '金行', '$2a$10$2ox56qY8z556d59eBMusKukDmxGLfCmeUBHWuhMTYf7KAdt64KpGy', 'jin', '金', 1, '2026-10-16 15:41:13', 1, '2026-10-16 15:41:13', '2026-10-16 15:41:13');
-INSERT INTO `wushan_user` VALUES (2, '木行', '$2a$10$CtWXR3Xa/YzDBkcEDQQDgei.X0gN//0VTpNfpgEolicmUjcL1xota', 'huo', '木', 1, '2026-10-16 15:46:33', 1, '2026-10-16 15:46:33', '2026-10-16 15:52:35');
-INSERT INTO `wushan_user` VALUES (3, '水行', '$2a$10$84mQugdp6teYV2QQJlBVyeoOkGEQuznBCoJnFpJBjsPld3g1ypfaG', 'huo', '水', 1, '2026-10-16 15:47:27', 1, '2026-10-16 15:47:27', '2026-10-16 15:52:30');
-INSERT INTO `wushan_user` VALUES (4, '火行', '$2a$10$lZE/nfPpowJjjhF2xAkh6umOXm30JM71KKjE5KpjIsbn3Nxcnk5im', 'huo', '火', 1, '2026-10-16 15:49:47', 1, '2026-10-16 15:49:47', '2026-10-16 15:49:47');
-INSERT INTO `wushan_user` VALUES (5, '土行', '$2a$10$F8ma5/0.rOzBt9bbmh.vles8EmUt0WTqTGmxn.08WFGOBUQ0GA54W', 'tu', '土', 1, '2026-10-16 15:50:41', 1, '2026-10-16 15:50:41', '2026-10-16 15:50:41');
-INSERT INTO `wushan_user` VALUES (6, '验收行者', '$2a$10$NTH86cwkyN6erMUw5eh80eozwDqdgUAPyrXVQRP4RqpmDIvMcdmPO', 'huo', '火', 1, '2026-10-16 16:06:58', 1, '2026-10-16 16:06:58', '2026-10-16 16:06:58');
-INSERT INTO `wushan_user` VALUES (7, 'yy', '$2a$10$7LXfYOBAzqu/ZUN4dZ5Fg.6h38SG/yOZqGq87byomFalbWG1pWoBe', 'huo', '火', 1, '2026-10-16 16:37:43', 1, '2026-10-16 16:37:43', '2026-10-16 16:37:43');
+-- 暗语（密码）按需求明文存储，不再使用 BCrypt 密文
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (1, '金行', 'wushan123', 'jin', '金', 1, '2026-10-16 15:41:13', 1, 1, '2026-10-16 15:41:13', '2026-10-16 15:41:13');
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (2, '木行', 'wushan123', 'huo', '木', 1, '2026-10-16 15:46:33', 1, 1, '2026-10-16 15:46:33', '2026-10-16 15:46:33');
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (3, '水行', 'wushan123', 'huo', '水', 1, '2026-10-16 15:47:27', 1, 1, '2026-10-16 15:47:27', '2026-10-16 15:47:27');
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (4, '火行', 'wushan123', 'huo', '火', 1, '2026-10-16 15:49:47', 1, 1, '2026-10-16 15:49:47', '2026-10-16 15:49:47');
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (5, '土行', 'wushan123', 'tu', '土', 1, '2026-10-16 15:50:41', 1, 1, '2026-10-16 15:50:41', '2026-10-16 15:50:41');
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (6, '验收行者', 'wushan123', 'huo', '火', 1, '2026-10-16 16:06:58', 1, 1, '2026-10-16 16:06:58', '2026-10-16 16:06:58');
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (7, 'yy', 'wushan123', 'huo', '火', 1, '2026-10-16 16:37:43', 1, 1, '2026-10-16 16:37:43', '2026-10-16 16:37:43');
+-- 内置执事（管理员）：admin / admin123，role=0
+INSERT INTO `wushan_user` (`id`, `username`, `password`, `element`, `element_label`, `agreed`, `agreed_at`, `status`, `role`, `create_time`, `update_time`) VALUES (8, 'admin', 'admin123', 'huo', '火', 1, '2026-10-28 08:57:00', 1, 0, '2026-10-28 08:57:00', '2026-10-28 08:57:00');
 
 SET FOREIGN_KEY_CHECKS = 1;

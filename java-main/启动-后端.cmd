@@ -24,6 +24,7 @@ rem    wushan_user        → schema.sql        （认证：山籍表）
 rem    wushan_category    → schema-home.sql   （首页：分类/品阶/条目/导航/热词/公告/四时/论道/搜索日志）
 rem    wushan_market_item → upgrade-nav.sql   （市集物品/交易日志 + 论道与分类扩充种子）
 rem    wushan_spirit_root → upgrade-codex.sql （藏经阁：灵根/秘境）
+rem    wushan_user.role   → upgrade-role.sql  （权限字段：0=管理员 1=普通山友，缺列时自动补）
 rem ------------------------------------------------------------
 set "MYSQL=C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
 set "DB=src\main\resources\db"
@@ -38,6 +39,7 @@ if exist "%MYSQL%" (
     call :ensure_table wushan_category    "%DB%\schema-home.sql"
     call :ensure_table wushan_market_item "%DB%\upgrade-nav.sql"
     call :ensure_table wushan_spirit_root "%DB%\upgrade-codex.sql"
+    call :ensure_column wushan_user role  "%DB%\upgrade-role.sql"
 ) else (
     echo [警告] 未找到 MySQL 客户端 %MYSQL%，跳过建表检查。
     echo [警告] 若表缺失，首页/藏经接口将报错，请先启动 MySQL80 服务。
@@ -57,7 +59,19 @@ rem ------------------------------------------------------------
 :ensure_table
 "%MYSQL%" -uroot -p123456 -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='wushan' AND table_name='%1'" 2>nul | findstr /b "1" >nul
 if errorlevel 1 (
-    echo [初始化] 缺少表 %1，正在执行 %~nx2 ...
+    echo [初始化] 缺少表 %1，正在执行 %~nx3 ...
     "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%2"
+)
+exit /b 0
+
+rem ------------------------------------------------------------
+rem  子程序：列不存在则执行对应 SQL 脚本
+rem    %1 = 表名    %2 = 列名    %3 = SQL 脚本路径（相对 springBootTest 目录）
+rem ------------------------------------------------------------
+:ensure_column
+"%MYSQL%" -uroot -p123456 -N -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='wushan' AND table_name='%1' AND column_name='%2'" 2>nul | findstr /b "1" >nul
+if errorlevel 1 (
+    echo [初始化] 表 %1 缺少字段 %2，正在执行 %~nx3 ...
+    "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%3"
 )
 exit /b 0
