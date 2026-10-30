@@ -11,6 +11,12 @@ import { ELEMENTS, findElement } from '../constants/wuxing'
 import { getHistory, addHistory, removeHistory, clearHistory } from '../utils/searchHistory'
 import { highlight } from '../utils/highlight'
 
+// 导航项背景图池（水墨四相：紫焰 / 炎笑 / 炎影 / 冰画）
+import navBg1 from '../assets/nav-bg-1.jpg'
+import navBg2 from '../assets/nav-bg-2.jpg'
+import navBg3 from '../assets/nav-bg-3.jpg'
+import navBg4 from '../assets/nav-bg-4.jpg'
+
 const props = defineProps({
   username: { type: String, default: '' },
   // 权限：0=执事（显示后台入口） 1=山友（不显示，也无法登录后台）
@@ -28,6 +34,25 @@ const navItems = ref([
 const activeNav = ref('guanshan')
 // 各导航内容的懒加载标记：首次切入时才拉数据
 const navLoaded = ref({ guanshan: true })
+
+/* ------------------------------ 导航项背景图（每次进入随机打乱） ------------------------------ */
+const navBgPool = ref([navBg1, navBg2, navBg3, navBg4])
+
+/** Fisher–Yates 洗牌：把四张背景图随机分给各导航项（多退少补，超出的导航项循环复用） */
+function shuffleNavBg() {
+  const arr = [navBg1, navBg2, navBg3, navBg4]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  navBgPool.value = arr
+}
+
+/** 当前导航功能对应的全屏背景图（与登录/注册页 bg-photo 同款呈现） */
+const activeBg = computed(() => {
+  const i = navItems.value.findIndex((it) => it.key === activeNav.value)
+  return navBgPool.value[(i < 0 ? 0 : i) % navBgPool.value.length]
+})
 
 function switchNav(item) {
   activeNav.value = item.key
@@ -569,6 +594,7 @@ function onGlobalKey(e) {
 }
 
 onMounted(async () => {
+  shuffleNavBg() // 打乱导航背景图顺序
   document.addEventListener('mousedown', onDocMouseDown)
   window.addEventListener('keydown', onGlobalKey)
 
@@ -612,6 +638,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="home" ref="homeEl" @scroll.passive="onScroll">
+    <!-- ============ 全屏照片背景：与登录/注册页同款，切导航换图（顺序已随机打乱） ============ -->
+    <Transition name="bg-fade" mode="out-in">
+      <div :key="activeNav" class="bg-photo" :style="{ backgroundImage: `url(${activeBg})` }"></div>
+    </Transition>
+
     <!-- ============ 顶部导航栏 ============ -->
     <header class="navbar">
       <div class="brand">
@@ -1364,6 +1395,33 @@ onBeforeUnmount(() => {
 }
 
 /* ============================== 主体 ============================== */
+/* ---------- 全屏照片背景（与登录/注册页 bg-photo 同款） ---------- */
+.bg-photo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
+}
+.bg-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(10, 10, 9, 0) 40%, rgba(10, 10, 9, 0.55) 100%),
+    linear-gradient(180deg, rgba(10, 10, 9, 0.45) 0%, rgba(10, 10, 9, 0.35) 45%, rgba(10, 10, 9, 0.62) 100%);
+}
+/* 背景图淡入淡出 */
+.bg-fade-enter-active,
+.bg-fade-leave-active {
+  transition: opacity 0.6s ease;
+}
+.bg-fade-enter-from,
+.bg-fade-leave-to {
+  opacity: 0;
+}
+
 .home {
   position: relative;
   z-index: 2;

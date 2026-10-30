@@ -7,7 +7,16 @@ import { codexApi } from '../api/codex'
 import { ELEMENTS, findElement } from '../constants/wuxing'
 import { GRADES, findGrade, CATEGORIES } from '../constants/codex'
 
+// 全屏背景图池（与首页 bg-photo 同款）：进入宝库时随机取一张
+import navBg1 from '../assets/nav-bg-1.jpg'
+import navBg2 from '../assets/nav-bg-2.jpg'
+import navBg3 from '../assets/nav-bg-3.jpg'
+import navBg4 from '../assets/nav-bg-4.jpg'
+
 const emit = defineEmits(['to-home'])
+
+/* ------------------------------ 全屏背景图（随机一张） ------------------------------ */
+const codexBg = ref(navBg1)
 
 /* ------------------------------ 筛选状态 ------------------------------ */
 const activeElement = ref('all') // all | 元素 key
@@ -58,7 +67,12 @@ async function load() {
 }
 
 watch([activeElement, activeTab, activeGrade], load)
-onMounted(load)
+onMounted(() => {
+  // 进入宝库时随机抽一张背景图（与首页打乱逻辑同源）
+  const pool = [navBg1, navBg2, navBg3, navBg4]
+  codexBg.value = pool[Math.floor(Math.random() * pool.length)]
+  load()
+})
 
 function resetGrade() {
   activeGrade.value = 'all'
@@ -67,6 +81,11 @@ function resetGrade() {
 
 <template>
   <div class="codex">
+    <!-- ============ 全屏照片背景：与首页/登录页 bg-photo 同款，进入时随机一张 ============ -->
+    <Transition name="bg-fade" mode="out-in">
+      <div key="codex-bg" class="bg-photo" :style="{ backgroundImage: `url(${codexBg})` }"></div>
+    </Transition>
+
     <!-- ============ 页头 ============ -->
     <header class="codex-head">
       <button class="back-btn" @click="emit('to-home')">‹ 回首页</button>
@@ -195,6 +214,33 @@ function resetGrade() {
 
 <style scoped>
 /* ============================== 页头 ============================== */
+/* ---------- 全屏照片背景（与首页/登录页 bg-photo 同款） ---------- */
+.bg-photo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
+}
+.bg-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(10, 10, 9, 0) 40%, rgba(10, 10, 9, 0.55) 100%),
+    linear-gradient(180deg, rgba(10, 10, 9, 0.45) 0%, rgba(10, 10, 9, 0.35) 45%, rgba(10, 10, 9, 0.62) 100%);
+}
+/* 背景图淡入淡出 */
+.bg-fade-enter-active,
+.bg-fade-leave-active {
+  transition: opacity 0.6s ease;
+}
+.bg-fade-enter-from,
+.bg-fade-leave-to {
+  opacity: 0;
+}
+
 .codex {
   position: relative;
   z-index: 2;
