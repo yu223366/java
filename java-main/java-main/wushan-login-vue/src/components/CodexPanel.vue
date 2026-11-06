@@ -218,7 +218,10 @@ function resetGrade() {
 .bg-photo {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  /* 关键：必须是负值，理由同首页 .bg-photo ——
+     z-index: 0 的定位图层会盖在 .codex 内所有未定位内容之上，
+     导致左栏五行、品阶、卡片全部"隐身"，只有 :hover 带 transform 的元素才浮上来。 */
+  z-index: -1;
   background-size: cover;
   background-position: center 30%;
   background-repeat: no-repeat;
@@ -246,7 +249,8 @@ function resetGrade() {
   z-index: 2;
   height: 100vh;
   overflow-y: auto;
-  scroll-behavior: smooth;
+  /* 性能：去掉 scroll-behavior: smooth（键盘翻页/空格滚动会变成易掉帧的缓动动画） */
+  overscroll-behavior: contain;
 }
 .codex-head {
   position: sticky;
@@ -256,9 +260,9 @@ function resetGrade() {
   align-items: center;
   gap: 24px;
   padding: 14px 28px;
-  background: linear-gradient(180deg, rgba(14, 13, 12, 0.92), rgba(14, 13, 12, 0.6));
+  background: linear-gradient(180deg, rgba(14, 13, 12, 0.96), rgba(14, 13, 12, 0.78));
   border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(6px);
+  /* 性能：去掉 backdrop-filter: blur(6px)。吸顶栏横跨整屏，每帧重算模糊代价极高 */
 }
 .back-btn {
   padding: 8px 16px;
@@ -353,7 +357,7 @@ function resetGrade() {
   font-size: 16px;
   letter-spacing: 2px;
   border: 1px solid rgba(236, 228, 210, 0.14);
-  background: rgba(18, 18, 16, 0.6);
+  background: rgba(14, 13, 12, 0.78);
   color: var(--paper);
   transition: 0.2s;
 }
@@ -404,7 +408,7 @@ function resetGrade() {
   letter-spacing: 4px;
   color: var(--paper);
   border: 1px solid rgba(236, 228, 210, 0.14);
-  background: rgba(18, 18, 16, 0.6);
+  background: rgba(14, 13, 12, 0.78);
   transition: 0.2s;
   text-align: center;
 }
@@ -420,7 +424,8 @@ function resetGrade() {
 }
 .tab.is-on {
   border-color: var(--accent);
-  background: rgba(236, 228, 210, 0.05);
+  /* 原来是 5% 白，选中态反而比未选中更透明、更看不清；改成强调色微光底 */
+  background: linear-gradient(180deg, rgba(232, 65, 43, 0.28), rgba(14, 13, 12, 0.86));
   box-shadow: 0 0 14px rgba(232, 65, 43, 0.25);
 }
 
@@ -444,7 +449,8 @@ function resetGrade() {
   border: 1px solid var(--line);
   cursor: pointer;
   transition: 0.2s;
-  background: rgba(236, 228, 210, 0.04);
+  /* 同首页：4% 白在明亮照片上看不出芯片形状，改水墨实底 */
+  background: rgba(14, 13, 12, 0.9);
   color: var(--paper);
 }
 .grade-chip:hover {

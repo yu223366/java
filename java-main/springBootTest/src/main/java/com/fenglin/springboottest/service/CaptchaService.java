@@ -29,9 +29,15 @@ public class CaptchaService {
 
     private final Map<String, Holder> store = new ConcurrentHashMap<>();
     private final Random random = new Random();
+    /** 上次清理过期符印的时间戳（每 60 秒最多清理一次，避免每次生成都遍历） */
+    private volatile long lastPurge = 0L;
+    private static final long PURGE_INTERVAL = 60_000L;
 
     /** 生成一张图形符印，返回标识与 base64 图片 */
     public CaptchaVo generate() {
+        // 性能/内存：旧实现只写不删，失效的符印会一直留在 Map 里，
+        // 长时间开着页面反复刷新验证码会让堆持续膨胀，进而 GC 频繁、接口变慢。
+        purgeExpired();
         String captchaId = UUID.randomUUID().toString().replace("-", "");
         String code = randomCode(CODE_LENGTH);
         store.put(captchaId, new Holder(code, System.currentTimeMillis() + expireSeconds * 1000L));
@@ -40,6 +46,16 @@ public class CaptchaService {
             vo.setDevCode(code);
         }
         return vo;
+    }
+
+    /** 惰性清理过期符印：过期即不可用，直接移除即可 */
+    private void purgeExpired() {
+        long now = System.currentTimeMillis();
+        if (now - lastPurge < PURGE_INTERVAL) {
+            return;
+        }
+        lastPurge = now;
+        store.entrySet().removeIf(e -> e.getValue().expireAt < now);
     }
 
     /** 校验图形符印（不在此消费，供发码与注册多次校验；注册成功后再消费） */

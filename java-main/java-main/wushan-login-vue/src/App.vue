@@ -78,6 +78,9 @@ function onAdminLogout() {
   view.value = 'home'
 }
 
+// 背景粒子强度：登录 / 注册页满量，进入内容较多的页面后降帧降密度
+const emberIntensity = computed(() => (view.value === 'login' || view.value === 'register' ? 1 : 0.45))
+
 const hint = computed(() =>
   view.value === 'login'
     ? 'VUE 重构 · 点五行可换主题色 · 任意非空名号暗语即可入山'
@@ -99,7 +102,7 @@ const hint = computed(() =>
     <Transition name="bg-fade">
       <div v-if="view === 'login' || view === 'register'" class="bg-photo" :style="{ backgroundImage: `url(${bgYinyang})` }"></div>
     </Transition>
-    <EmberBackground ref="bg" :ember-color="emberColor" />
+    <EmberBackground ref="bg" :ember-color="emberColor" :intensity="emberIntensity" />
     <FogMountains />
     <div class="fogband"></div>
 
@@ -170,6 +173,8 @@ const hint = computed(() =>
   background-size: cover;
   background-position: center 30%;
   background-repeat: no-repeat;
+  /* 注意：不要加 transform: translateZ(0) / will-change ——
+     与全屏 canvas 叠成多个超大图层会让浏览器光栅预算吃紧，内容被延迟绘制 */
 }
 .bg-photo::after {
   content: '';
@@ -228,17 +233,18 @@ const hint = computed(() =>
   letter-spacing: 2px;
 }
 
-/* 登录 / 注册 切换动效 */
+/* 视图切换动效
+   性能：只保留 opacity。
+   之前带 transform: translateY + scale(0.98)，等于让 HomePanel / CodexPanel 这种
+   几千个节点的整页组件在 0.32s 内做变换动画，很容易掉帧；
+   而且 Vue 的 <Transition> 依赖 transitionend 收尾，动画被打断时元素会卡在
+   opacity:0 的 enter-from 状态 —— 表现就是"页面空着，要动一下鼠标才出来"。 */
 .swap-enter-active,
 .swap-leave-active {
-  transition: opacity 0.32s ease, transform 0.32s ease;
+  transition: opacity 0.16s ease;
 }
-.swap-enter-from {
-  opacity: 0;
-  transform: translateY(14px) scale(0.98);
-}
+.swap-enter-from,
 .swap-leave-to {
   opacity: 0;
-  transform: translateY(-12px) scale(0.98);
 }
 </style>

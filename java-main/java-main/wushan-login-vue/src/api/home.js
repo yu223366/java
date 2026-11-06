@@ -309,7 +309,8 @@ export const homeApi = {
   async search(keyword, filters = {}) {
     const kw = String(keyword || '').trim()
     if (USE_MOCK) {
-      await sleep(500)
+      // 只留 120ms 的"网络感"，原来的 500ms 纯属自造卡顿
+      await sleep(120)
       let list = mockLibrary()
       // mock 模式下也尽力支持 element / category 基础过滤，便于离线演示
       if (filters.element && filters.element !== 'all') {
@@ -436,7 +437,7 @@ export const homeApi = {
   /** 退出登录 */
   async logout() {
     if (USE_MOCK) {
-      await sleep(300)
+      await sleep(120)
       tokenStore.clear()
       return { ok: true }
     }

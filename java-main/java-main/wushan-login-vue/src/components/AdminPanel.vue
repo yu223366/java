@@ -570,8 +570,8 @@ onMounted(loadList)
   margin-top: 16px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(18, 18, 16, 0.66), rgba(10, 10, 9, 0.72));
-  backdrop-filter: blur(3px);
+  background: linear-gradient(180deg, rgba(18, 18, 16, 0.8), rgba(10, 10, 9, 0.84));
+  /* 性能：去掉 backdrop-filter，改用更实的底色 */
   overflow-x: auto;
   min-height: 220px;
 }

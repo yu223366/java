@@ -320,10 +320,10 @@ onMounted(() => {
   padding: 40px 34px 30px;
   border-radius: 4px;
   position: relative;
-  background: linear-gradient(180deg, rgba(18, 18, 16, 0.72), rgba(10, 10, 9, 0.8));
+  background: linear-gradient(180deg, rgba(18, 18, 16, 0.86), rgba(10, 10, 9, 0.9));
   border: 1px solid rgba(236, 228, 210, 0.16);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55), inset 0 0 60px rgba(232, 65, 43, 0.06);
-  backdrop-filter: blur(3px);
+  /* 性能：去掉 backdrop-filter，改用更实的底色（底下是逐帧变化的粒子画布） */
 }
 .panel::-webkit-scrollbar {
   width: 6px;

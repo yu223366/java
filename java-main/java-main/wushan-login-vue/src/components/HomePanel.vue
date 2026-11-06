@@ -54,6 +54,20 @@ const activeBg = computed(() => {
   return navBgPool.value[(i < 0 ? 0 : i) % navBgPool.value.length]
 })
 
+/**
+ * 预加载四张导航背景图。
+ * 旧版是切到某个导航时才开始下载该图（单张 max 200KB），
+ * 切换瞬间会白闪 / 掉帧，看起来就像"点了没反应"。
+ */
+function preloadNavBg() {
+  const imgs = [navBg1, navBg2, navBg3, navBg4]
+  for (let i = 0; i < imgs.length; i++) {
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = imgs[i]
+  }
+}
+
 function switchNav(item) {
   activeNav.value = item.key
   // 宝库 → 宝库页（App 层切视图）；观山/论道/市集在首页内切换内容
@@ -566,14 +580,14 @@ const homeEl = ref(null)
 const showTop = ref(false)
 
 function onScroll() {
-  showTop.value = (homeEl.value && homeEl.value.scrollTop > 360) || window.scrollY > 360
+  // 滚动事件高频，先比一次再赋值：跨过 360px 阈值前不会碰到 ref 的 setter
+  const v = (homeEl.value && homeEl.value.scrollTop > 360) || window.scrollY > 360
+  if (v !== showTop.value) showTop.value = v
 }
 function toTop() {
   if (homeEl.value) homeEl.value.scrollTo({ top: 0, behavior: 'smooth' })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
-
-let io = null
 
 /** 点击搜索栏之外 → 收起联想面板 */
 function onDocMouseDown(e) {
@@ -595,6 +609,7 @@ function onGlobalKey(e) {
 
 onMounted(async () => {
   shuffleNavBg() // 打乱导航背景图顺序
+  preloadNavBg() // 预加载背景图，避免切导航时白闪
   document.addEventListener('mousedown', onDocMouseDown)
   window.addEventListener('keydown', onGlobalKey)
 
@@ -611,23 +626,14 @@ onMounted(async () => {
     .then((u) => { userText.value = u.username || props.username || '雾山行者' })
     .catch(() => { userText.value = props.username || '雾山行者' })
 
-  // 滚动渐显
-  if (typeof IntersectionObserver !== 'undefined') {
-    io = new IntersectionObserver(
-      (es) => es.forEach((e) => {
-        if (e.isIntersecting) {
-          e.target.classList.add('in')
-          io.unobserve(e.target)
-        }
-      }),
-      { threshold: 0.12, root: homeEl.value }
-    )
-    document.querySelectorAll('.reveal').forEach((el) => io.observe(el))
-  }
+  // 说明：这里原本用 IntersectionObserver 给 .reveal 元素加 .in 类来做"滚动渐显"。
+  // 该机制会让内容默认 opacity:0（即"隐身"），只有被观察器判定进入视口才淡入；
+  // v-show 切换出来的「论道 / 市集」区块在挂载时是 display:none，观察器判定不到，
+  // 于是长期停在 opacity:0，看起来就是"要点一下 / 鼠标划过去才出现"。
+  // 现已整体移除：所有区块一律直接可见。
 })
 
 onBeforeUnmount(() => {
-  if (io) io.disconnect()
   document.removeEventListener('mousedown', onDocMouseDown)
   window.removeEventListener('keydown', onGlobalKey)
   cancelSuggest()
@@ -639,7 +645,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="home" ref="homeEl" @scroll.passive="onScroll">
     <!-- ============ 全屏照片背景：与登录/注册页同款，切导航换图（顺序已随机打乱） ============ -->
-    <Transition name="bg-fade" mode="out-in">
+    <!-- 性能/体感：去掉 mode="out-in"。原来旧图先淡出 0.6s、新图再淡入 0.6s，
+         点一下导航要等 1.2 秒才看到画面，非常像"卡住了"；改成两张叠着交叉淡化 0.35s -->
+    <Transition name="bg-fade">
       <div :key="activeNav" class="bg-photo" :style="{ backgroundImage: `url(${activeBg})` }"></div>
     </Transition>
 
@@ -868,7 +876,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 五行卡片（观山） -->
-      <section class="cards reveal" v-show="activeNav === 'guanshan'">
+      <section class="cards" v-if="activeNav === 'guanshan'">
         <div
           v-for="el in ELEMENTS"
           :key="el.key"
@@ -930,7 +938,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 五行相生环（观山） -->
-      <section class="block reveal" v-show="activeNav === 'guanshan'">
+      <section class="block" v-if="activeNav === 'guanshan'">
         <h2 class="block-title">五 行 相 生</h2>
         <p class="block-sub">木生火 · 火生土 · 土生金 · 金生水 · 水生木，周而复始</p>
         <div class="ring-wrap">
@@ -982,7 +990,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 山中四时图卷（观山） -->
-      <section class="block reveal" v-if="scenes.length" v-show="activeNav === 'guanshan'">
+      <section class="block" v-if="scenes.length && activeNav === 'guanshan'">
         <h2 class="block-title">山 中 四 时</h2>
         <p class="block-sub">春夏秋冬 · 山色各异 · 入景即寻</p>
         <div class="scenes">
@@ -1000,7 +1008,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 山友论道榜（观山 · 精选十席） -->
-      <section class="block reveal" v-if="discourse.length" v-show="activeNav === 'guanshan'">
+      <section class="block" v-if="discourse.length && activeNav === 'guanshan'">
         <h2 class="block-title">山 友 论 道</h2>
         <p class="block-sub">论道台 · 山友之言 · 以赞为证</p>
         <div class="discourse">
@@ -1019,7 +1027,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- ============ 论道堂（导航「论道」：登台发表 + 服务端点赞 + 分页） ============ -->
-      <section class="block lundao-panel" v-show="activeNav === 'lundao'">
+      <section class="block lundao-panel" v-if="activeNav === 'lundao'">
         <h2 class="block-title">论 道 台</h2>
         <p class="block-sub">山友之言 · 以赞为证 · 登台一语</p>
 
@@ -1067,7 +1075,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- ============ 市集（导航「市集」：筛选 + 灵石购买 + 分页） ============ -->
-      <section class="block market-panel" v-show="activeNav === 'shiji'">
+      <section class="block market-panel" v-if="activeNav === 'shiji'">
         <h2 class="block-title">雾 山 市 集</h2>
         <p class="block-sub">以灵石易物 · 童叟无欺 · 售罄即止</p>
 
@@ -1155,7 +1163,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 墨韵页脚 -->
-      <footer class="footer reveal">
+      <footer class="footer">
         <div class="footer-seal">雾<br />山</div>
         <div class="footer-line"></div>
         <p class="footer-text">雾 山 五 行 · 境 内 一 隅</p>
@@ -1182,9 +1190,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 28px;
   padding: 14px 28px;
-  background: linear-gradient(180deg, rgba(14, 13, 12, 0.92), rgba(14, 13, 12, 0.6));
+  background: linear-gradient(180deg, rgba(14, 13, 12, 0.96), rgba(14, 13, 12, 0.8));
   border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(6px);
+  /* 性能：去掉 backdrop-filter: blur(6px)。吸顶导航横跨整屏，下方是逐帧变化的粒子画布，
+     每帧重算模糊会直接吃掉一半帧率；改实底色后基本看不出差别 */
 }
 .brand {
   display: flex;
@@ -1356,9 +1365,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 14px;
   padding: 7px 28px;
-  background: rgba(10, 10, 9, 0.72);
+  background: rgba(10, 10, 9, 0.88);
   border-bottom: 1px solid rgba(236, 228, 210, 0.08);
-  backdrop-filter: blur(4px);
+  /* 性能：去掉 backdrop-filter，改实底色 */
   overflow: hidden;
 }
 .announce-tag {
@@ -1382,6 +1391,8 @@ onBeforeUnmount(() => {
 .announce-move {
   display: inline-flex;
   animation: marquee 36s linear infinite;
+  /* 提升为合成层：跑马灯只做位移合成，不牵连整条公告栏重绘 */
+  will-change: transform;
 }
 .announce-move span {
   font-size: 13px;
@@ -1399,10 +1410,19 @@ onBeforeUnmount(() => {
 .bg-photo {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  /* 关键：必须是负值。
+     z-index: 0 时，这个 position:fixed 图层在 .home 的层叠上下文里排在"第 6 步"（定位元素），
+     而 .home 里未定位的行内/块级内容排在"第 3~5 步"，于是整张背景图会盖在所有普通内容之上。
+     表现就是：文字、卡片、筛选芯片全部"隐身"，只有 :hover 带 transform 的元素（会新建
+     层叠上下文、跳到第 6 步且按 DOM 顺序更靠后）才浮到背景之上 —— 即"鼠标移上去才出现"。
+     改成 -1 后背景沉到内容之下，所有内容无需任何交互即直接可见。 */
+  z-index: -1;
   background-size: cover;
   background-position: center 30%;
   background-repeat: no-repeat;
+  /* 注意：这里不要再加 transform: translateZ(0) / will-change。
+     全屏背景再提升为独立图层，会和全屏 canvas 一起吃掉两份 4K 级显存，
+     浏览器会因光栅预算不足而延迟绘制页面内容。 */
 }
 .bg-photo::after {
   content: '';
@@ -1412,10 +1432,10 @@ onBeforeUnmount(() => {
     radial-gradient(120% 90% at 50% 40%, rgba(10, 10, 9, 0) 40%, rgba(10, 10, 9, 0.55) 100%),
     linear-gradient(180deg, rgba(10, 10, 9, 0.45) 0%, rgba(10, 10, 9, 0.35) 45%, rgba(10, 10, 9, 0.62) 100%);
 }
-/* 背景图淡入淡出 */
+/* 背景图交叉淡化（.bg-photo 是 position:fixed inset:0，进出两张天然重叠） */
 .bg-fade-enter-active,
 .bg-fade-leave-active {
-  transition: opacity 0.6s ease;
+  transition: opacity 0.35s ease;
 }
 .bg-fade-enter-from,
 .bg-fade-leave-to {
@@ -1427,7 +1447,10 @@ onBeforeUnmount(() => {
   z-index: 2;
   height: 100vh;
   overflow-y: auto;
-  scroll-behavior: smooth;
+  /* 去掉 scroll-behavior: smooth —— 它会让 PageDown / 空格 / 方向键的滚动
+     都变成带缓动的动画，在这类长页面上极易掉帧，手感就是"上下滑动卡"。
+     需要平滑的地方（回顶、跳到搜索结果）仍在 JS 里显式传 behavior:'smooth' */
+  overscroll-behavior: contain;
 }
 .body {
   min-height: 100%;
@@ -1596,9 +1619,8 @@ onBeforeUnmount(() => {
   padding: 8px 0 4px;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: rgba(14, 13, 12, 0.97);
+  background: rgba(14, 13, 12, 0.98);
   box-shadow: 0 22px 50px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
 }
 .sb-panel-head {
   display: flex;
@@ -1760,7 +1782,9 @@ onBeforeUnmount(() => {
   padding: 4px 14px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(236, 228, 210, 0.04);
+  /* 原来是 rgba(236,228,210,0.04)（4% 白），叠在明亮的照片背景上等于没有底色，
+     芯片会像"幽灵框"一样看不清；改成实一点的水墨底，元素始终清晰可辨 */
+  background: rgba(14, 13, 12, 0.9);
   transition: 0.2s;
 }
 .hot-tag:hover {
@@ -1812,7 +1836,8 @@ onBeforeUnmount(() => {
   padding: 4px 14px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(236, 228, 210, 0.04);
+  /* 同 .hot-tag：4% 白在亮背景上看不出边框，改成水墨实底 */
+  background: rgba(14, 13, 12, 0.9);
   color: var(--paper);
   cursor: pointer;
   letter-spacing: 1px;
@@ -1833,7 +1858,7 @@ onBeforeUnmount(() => {
   padding: 3px 10px;
   font-size: 12px;
   border-style: dashed;
-  opacity: 0.88;
+  /* 去掉 opacity: 0.88 —— 半透明的芯片叠在亮背景上会再次变淡，层级靠虚线边框区分即可 */
 }
 .f-above {
   padding: 3px 12px;
@@ -1841,7 +1866,9 @@ onBeforeUnmount(() => {
   letter-spacing: 2px;
   border-radius: 20px;
   border: 1px dashed var(--line);
-  color: var(--muted);
+  /* 原来没有底色，只剩一条虚线在照片上，几乎看不见 */
+  background: rgba(14, 13, 12, 0.82);
+  color: rgba(236, 228, 210, 0.75);
   cursor: pointer;
   transition: 0.2s;
   user-select: none;
@@ -2062,7 +2089,7 @@ onBeforeUnmount(() => {
   padding: 8px 26px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  background: rgba(236, 228, 210, 0.04);
+  background: rgba(14, 13, 12, 0.9);
   color: var(--paper);
   font-size: 13px;
   letter-spacing: 3px;
@@ -2288,7 +2315,8 @@ onBeforeUnmount(() => {
   padding: 14px 18px;
   border-radius: 8px;
   border: 1px solid rgba(236, 228, 210, 0.12);
-  background: rgba(18, 18, 16, 0.6);
+  /* 0.6 太透，压在明亮照片上会糊成一片；提亮到 0.84 保证每条论道都清晰可读 */
+  background: rgba(18, 18, 16, 0.84);
   transition: 0.2s;
 }
 .ds-item:hover {
@@ -2445,11 +2473,10 @@ onBeforeUnmount(() => {
   font-size: 17px;
   letter-spacing: 0;
   color: var(--paper);
-  background: rgba(18, 18, 16, 0.85);
+  background: rgba(18, 18, 16, 0.94);
   border: 1px solid var(--line);
   cursor: pointer;
   transition: 0.2s;
-  backdrop-filter: blur(4px);
 }
 .to-top:hover {
   border-color: var(--accent);
@@ -2458,16 +2485,7 @@ onBeforeUnmount(() => {
   transform: translateY(-3px);
 }
 
-/* ---------- 滚动渐显 ---------- */
-.reveal {
-  opacity: 0;
-  transform: translateY(26px);
-  transition: opacity 0.7s ease, transform 0.7s ease;
-}
-.reveal.in {
-  opacity: 1;
-  transform: none;
-}
+/* ---------- 回顶按钮过渡 ---------- */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
@@ -2624,7 +2642,7 @@ onBeforeUnmount(() => {
   padding: 18px 20px 14px;
   border-radius: 12px;
   border: 1px solid rgba(236, 228, 210, 0.12);
-  background: rgba(18, 18, 16, 0.62);
+  background: rgba(18, 18, 16, 0.84);
   transition: 0.25s;
   overflow: hidden;
 }
