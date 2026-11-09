@@ -2,16 +2,19 @@
 // 根组件：负责整体布局，并把「五行主题色」状态提升到此处，
 // 同时分发给背景粒子（emberColor）与面板（accent）；
 // 并在 登录 / 注册 / 首页 / 宝库 / 后台登录 / 后台管理 六个视图间切换。
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import EmberBackground from './components/EmberBackground.vue'
 import FogMountains from './components/FogMountains.vue'
 import LoginPanel from './components/LoginPanel.vue'
 import RegisterPanel from './components/RegisterPanel.vue'
 import HomePanel from './components/HomePanel.vue'
 import CodexPanel from './components/CodexPanel.vue'
+import AuctionPanel from './components/AuctionPanel.vue'
 import AdminLoginPanel from './components/AdminLoginPanel.vue'
 import AdminPanel from './components/AdminPanel.vue'
 import { adminApi } from './api/admin'
+import { tokenStore, sessionStore, USE_MOCK } from './api/auth'
+import { homeApi } from './api/home'
 import bgYinyang from './assets/bg-yinyang.jpg'
 
 const accent = ref('#e8412b')
@@ -42,17 +45,20 @@ function onEnterHome(name, r) {
   view.value = 'home'
 }
 
-// 首页「出山」：回到登录页
+// 首页「出山」：回到登录页（本地会话一并清掉，刷新后不会自动复登）
 function onLogout() {
   username.value = ''
   role.value = 1
+  sessionStore.clear()
   view.value = 'login'
 }
 
-// 首页导航：宝库 → 宝库页；其余项暂为占位（后续接分页）
+// 首页导航：宝库 → 宝库页；拍卖行 → 拍卖行页；其余项暂为占位（后续接分页）
 // cangjing 为改名前的旧 key，库里若还是旧种子数据也能正常跳转
 function onNav(item) {
-  if (item && (item.key === 'baoku' || item.key === 'cangjing')) view.value = 'codex'
+  if (!item) return
+  if (item.key === 'baoku' || item.key === 'cangjing') view.value = 'codex'
+  if (item.key === 'paimai') view.value = 'auction'
 }
 
 // 首页导航栏「后台」：仅执事（role=0）可见可入；已持执事令牌就直接回后台，否则去登录页
@@ -81,6 +87,24 @@ function onAdminLogout() {
 // 背景粒子强度：登录 / 注册页满量，进入内容较多的页面后降帧降密度
 const emberIntensity = computed(() => (view.value === 'login' || view.value === 'register' ? 1 : 0.45))
 
+// 会话恢复：刷新 / 重开页面后，若本地还留着令牌就自动回到首页。
+// 关键：权限不信任本地缓存 —— 真实后端模式下用令牌换一次 /home/user/info，
+// role 以服务端返回为准；令牌失效（未登录 / 签名不符）则清干净停在登录页。
+onMounted(async () => {
+  const s = sessionStore.get()
+  if (!s || !s.username || !tokenStore.get()) return
+  try {
+    const u = await homeApi.getUserInfo(s.username)
+    username.value = (u && u.username) || s.username
+    // mock 的用户信息没有 role，回落本地会话值；真实后端一律以服务端为准
+    role.value = USE_MOCK ? (Number(s.role) === 0 ? 0 : 1) : (Number(u && u.role) === 0 ? 0 : 1)
+    view.value = 'home'
+  } catch (e) {
+    tokenStore.clear()
+    sessionStore.clear()
+  }
+})
+
 const hint = computed(() =>
   view.value === 'login'
     ? 'VUE 重构 · 点五行可换主题色 · 任意非空名号暗语即可入山'
@@ -88,7 +112,9 @@ const hint = computed(() =>
       ? '立 契 · 本命既定，五行同辉 · 名号与暗语须经校验'
       : view.value === 'codex'
         ? '宝 库 · 功法心得资源灵根秘境 · 按元素与品阶翻检'
-        : view.value === 'admin-login'
+        : view.value === 'auction'
+          ? '拍 卖 行 · 每 十 分 钟 一 场 · 出 价 五 秒 落 槌'
+          : view.value === 'admin-login'
           ? '后 台 · 执 事 入 内 · 此 处 只 通 执 事'
           : view.value === 'admin'
             ? '后 台 · 宝 库 数 据 管 理 · 改 动 即 时 生 效'
@@ -106,11 +132,16 @@ const hint = computed(() =>
     <FogMountains />
     <div class="fogband"></div>
 
-    <div class="wrap" :class="{ 'wrap-home': view === 'home' || view === 'codex' || view === 'admin' }">
+    <div class="wrap" :class="{ 'wrap-home': view === 'home' || view === 'codex' || view === 'auction' || view === 'admin' }">
       <Transition name="swap" mode="out-in">
         <CodexPanel
           v-if="view === 'codex'"
           key="codex"
+          @to-home="view = 'home'"
+        />
+        <AuctionPanel
+          v-else-if="view === 'auction'"
+          key="auction"
           @to-home="view = 'home'"
         />
         <HomePanel

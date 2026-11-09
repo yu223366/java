@@ -40,6 +40,9 @@ public class Item implements Serializable {
     /** 状态：1 上架 / 0 下架 */
     private Integer status;
 
+    /** 拍卖状态：0=未拍卖（默认） 1=已拍卖（拍卖行成交后置 1，不再入池） */
+    private Integer auction;
+
     /** 创建时间 */
     @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
     private LocalDateTime createTime;

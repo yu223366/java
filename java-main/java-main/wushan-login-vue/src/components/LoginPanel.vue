@@ -1,6 +1,6 @@
 <script setup>
 // 登录面板：五行换色 / 名号暗语输入 / 校验 / 登录成功「落印」动画
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { authApi, tokenStore } from '../api/auth'
 import { ELEMENTS } from '../constants/wuxing'
 
@@ -16,6 +16,34 @@ const err = ref('')
 const loading = ref(false)
 const loggedIn = ref(false)
 const card = ref(null)
+
+/**
+ * 「铭记于山」= 记住名号，下次进山自动落款。
+ * 注意：令牌与它无关 —— 真实后端模式下 token 必须无条件保存，
+ * 否则首页「用户信息 / 论道发言」这些带 Authorization 的接口会报令牌无效。
+ */
+const REM_KEY = 'wushan_rem_name'
+
+function saveRememberName(name) {
+  try {
+    if (name) localStorage.setItem(REM_KEY, name)
+    else localStorage.removeItem(REM_KEY)
+  } catch (e) {
+    /* 忽略：隐私模式 */
+  }
+}
+
+onMounted(() => {
+  try {
+    const n = localStorage.getItem(REM_KEY)
+    if (n) {
+      user.value = n
+      rem.value = true
+    }
+  } catch (e) {
+    /* 忽略：隐私模式 */
+  }
+})
 
 function pick(el) {
   active.value = el.key
@@ -49,7 +77,10 @@ async function submit() {
   try {
     // 预留接口：接后端时直接走真实登录（mock 模式下仍为本地模拟）
     const res = await authApi.login({ username: user.value.trim(), password: pass.value })
-    if (res && res.token && rem.value) tokenStore.set(res.token)
+    // 令牌无条件留存：后端模式下首页用户信息、论道发言都要带 Bearer
+    if (res && res.token) tokenStore.set(res.token)
+    // 「铭记于山」只负责记住名号，下次自动落款
+    saveRememberName(rem.value ? user.value.trim() : '')
     // 权限：0=执事（可见后台入口） 1=山友；缺省按山友处理
     const role = res && Number(res.role) === 0 ? 0 : 1
     setTimeout(() => {

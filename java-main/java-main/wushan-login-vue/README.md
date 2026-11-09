@@ -118,6 +118,27 @@ npm run preview  # 预览打包结果
 2. 若要走后端图形验证码，把 `authApi.getCaptcha()` 拿到的图片地址传给 `RegisterPanel` 中方框：`<CaptchaBox :image-src="capImage" captcha-id="capId" />`，此时前端只做非空/长度校验，比对全部交给后端。
 3. token 存取已内置：`tokenStore`（`src/api/auth.js`），登录/注册拿到 token 后调用 `tokenStore.set(res.token)` 即可。
 
+## 权限（role）与后台入口
+
+用户表 `wushan_user` 有一个权限字段 `role`，语义固定如下：
+
+| role | 含义 | 首页「后台」按钮 | 能否登录后台 |
+| --- | --- | --- | --- |
+| `0` | 管理员（执事） | 显示 | 可以 |
+| `1` | 普通山友（**注册默认**） | 不显示 | 不可以 |
+
+- 注册（`UserServiceImpl.register`）写库时固定 `role = 1`，接口不接收前端传的 role，无法自己提权。
+- 登录接口 `POST /api/auth/login` 会返回 `role`，前端 `LoginPanel` → `App.vue` → `HomePanel` 一路透传；`HomePanel` 用 `v-if="role === 0"` 渲染「后台」按钮，role=1 时按钮连 DOM 都不会生成。
+- 后台登录 `POST /api/admin/login` 二次校验：`role != 0` 直接返回「此处只通执事，山友请回前山。」；`/api/admin/treasury/*` 每次请求都会用 Bearer token 反查库里的 role，改前端状态也进不去。
+- 暗语（密码）按需求**明文存储**，不做哈希，`wushan_user.password` 直接存原文。
+- 内置执事账号：`admin / admin123`（`db/schema.sql` 种子）；把某个山友提为执事：
+
+  ```sql
+  UPDATE wushan_user SET role = 0 WHERE username = '名号';
+  ```
+
+> 权限判断依赖真实后端。若 `.env.local` 里 `VITE_USE_MOCK=true`，前端走本地假数据，只有名号为 `admin` 的登录会被当成执事，与数据库无关。
+
 ## 与原文件的对应
 
 | 原 login-wushan.html | Vue 组件 |

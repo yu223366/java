@@ -29,7 +29,8 @@ const navItems = ref([
   { key: 'guanshan', label: '观山', en: 'scenery' },
   { key: 'baoku', label: '宝库', en: 'treasury' },
   { key: 'lundao', label: '论道', en: 'discourse' },
-  { key: 'shiji', label: '市集', en: 'market' }
+  { key: 'shiji', label: '市集', en: 'market' },
+  { key: 'paimai', label: '拍卖行', en: 'auction' }
 ])
 const activeNav = ref('guanshan')
 // 各导航内容的懒加载标记：首次切入时才拉数据
@@ -70,8 +71,8 @@ function preloadNavBg() {
 
 function switchNav(item) {
   activeNav.value = item.key
-  // 宝库 → 宝库页（App 层切视图）；观山/论道/市集在首页内切换内容
-  if (item.key === 'baoku') {
+  // 宝库 → 宝库页；拍卖行 → 拍卖行页（均 App 层切视图）；观山/论道/市集在首页内切换内容
+  if (item.key === 'baoku' || item.key === 'paimai') {
     emit('nav', item)
     return
   }

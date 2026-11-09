@@ -41,7 +41,8 @@ new-java-main/
 5. **数据库「库在表缺」陷阱（2026-10-16 踩过）**：旧启动脚本只在 wushan 库整体缺失时执行 schema.sql；若库已存在但表缺失（重置快照只留 wushan_user），首页/藏经接口全部 500，前端各模块静默显示空态。现已改为逐表探测、按需应用 schema.sql → schema-home.sql → upgrade-nav.sql → upgrade-codex.sql（顺序有依赖）。**手动补库时也必须按此顺序，且加 `--default-character-set=utf8mb4` 防中文乱码。**
 6. **前端跑真实后端模式**：`.env.local` 为 `VITE_USE_MOCK=false`，首页/宝库数据全部来自 8080；宝库接口契约为 `/api/codex/items|spirit-roots|realms`（后端 CodexController 已实现，2026-10-16 新增）。
 7. **导航「藏经」已改名「宝库」（2026-10-23）**：`nav_key` 由 `cangjing` 改为 `baoku`。`schema-home.sql` 与 `wushan.sql` 的种子已同步，已建库执行 `UPDATE wushan_nav SET nav_key='baoku', label='宝库', en='treasury' WHERE nav_key='cangjing';`。前端 `App.vue` 的 `onNav` 对两个 key 都放行，旧库不会点不动。
-8. **后台账号是配置化的**：`wushan.admin.username/password`（application*.properties，默认 admin/admin123），不落库、不开放注册。生产务必改成强口令或接统一鉴权。
+8. **后台权限已改为落库字段（2026-10-26，早前"配置化账号"已废弃）**：`wushan_user.role`，`0=管理员(执事)`、`1=普通山友（注册默认）`。注册接口写死 role=1，接口不接收前端传的 role；首页「后台」按钮 `v-if="role === 0"`；`/api/admin/login` 与 `/api/admin/**` 都会反查库里的 role，role≠0 一律返回「此处只通执事，山友请回前山。」（实测 403）。内置执事 `admin/admin123`；提权：`UPDATE wushan_user SET role = 0 WHERE username='名号';`。老库补列执行 `db/upgrade-role.sql`。
+   **暗语（密码）按需求明文存储**，比对是 `password.equals(user.getPassword())`，不做 BCrypt。
 
 ## 后台管理系统（2026-10-23 新增）
 
@@ -63,7 +64,7 @@ DELETE /api/admin/treasury/{items|roots|realms}/{id}     # 软删除：status �
 - 后台删除是**软删**，前台立即可见；要彻底清除改 `AdminServiceImpl.remove` 为 `deleteById`。
 
 9. **前端「假就绪」陷阱（2026-10-26 踩过）**：Vite 即使模块解析失败（`Failed to resolve import`）也照常监听 5173，只查端口会误判为启动成功，页面却一片空白。现 一键启动.cmd 在就绪检查后会再扫一遍 `_vite.log`，命中 `Failed to resolve import` / `Internal server error` / `Pre-transform error` 就打印 `[异常]`；启动-前端.cmd / 启动-后端.cmd 每次启动前会先删掉旧日志，避免上次报错误报。
-10. **后台六个文件曾整体缺失（2026-10-26 修复）**：`App.vue` 引用了 `AdminLoginPanel.vue`、`AdminPanel.vue`、`api/admin.js`、`utils/treasuryStore.js`、`utils/searchHistory.js`、`utils/highlight.js`，但文件没落盘，Vite 直接 500。现已补齐；mock 演示账号 **admin / admin123**，数据落在 `wushan:treasury:v1`。**后端 AdminController.java 尚未实现**，真实模式（VITE_USE_MOCK=false）下 `/api/admin/*` 会 404，后台只在 mock 模式可用。
+10. **后台六个文件曾整体缺失（2026-10-26 修复）**：`App.vue` 引用了 `AdminLoginPanel.vue`、`AdminPanel.vue`、`api/admin.js`、`utils/treasuryStore.js`、`utils/searchHistory.js`、`utils/highlight.js`，但文件没落盘，Vite 直接 500。现已补齐；mock 演示账号 **admin / admin123**，数据落在 `wushan:treasury:v1`。**后端 AdminController.java 已实现**（`/api/admin/login|logout|treasury/*`，按 `wushan_user.role` 判权），真实模式下后台同样可用。
 
 ## 手动启动命令（等价于脚本）
 
@@ -74,6 +75,22 @@ DELETE /api/admin/treasury/{items|roots|realms}/{id}     # 软删除：status �
 npm install --no-audit --no-fund && npm run dev
 ```
 
+11. **`mvnw` 在无网/代理环境下会先卡在下载 Maven 发行包**（`curl: Failed to fetch .../apache-maven-3.9.9-bin.zip`），即使 `~/.m2/wrapper/dists` 里已经有解压好的 3.9.9。绕过方式：直接用已解压的 Maven 走 classworlds 启动（WorkingDir 必须是 springBootTest）：
+   ```bash
+   MH="C:/Users/Administrator/.m2/wrapper/dists/apache-maven-3.9.9-bin/4nf9hui3q3djbarqar9g711ggc/apache-maven-3.9.9"
+   java -classpath "$MH/boot/plexus-classworlds-2.8.0.jar" \
+     "-Dclassworlds.conf=$MH/bin/m2.conf" "-Dmaven.home=$MH" \
+     "-Dmaven.multiModuleProjectDirectory=." \
+     org.codehaus.plexus.classworlds.launcher.Launcher -o spring-boot:run \
+     "-Dspring-boot.run.arguments=--server.port=8080"
+   ```
+   注意 `-o`（离线）必须加，否则会去中央仓拉插件。另外本机 shell 设了 `http_proxy=127.0.0.1:60068`，curl 测本地端口建议加 `--noproxy '*'`。
+
+12. **令牌已加 HMAC-SHA256 签名（2026-11-09）**：`TokenUtil` 由 `base64(userId:username:ts)` 改为 `base64url(payload).签名`，`parse` 先验签再取字段。原因：旧令牌无签名，普通山友把内容改成 `8:admin:<ts>` 再 base64 就能冒充执事，`role=0` 的闸门等于没有。
+    - 密钥优先级：环境变量 `WUSHAN_TOKEN_SECRET` → 系统属性 `wushan.token.secret` → 内置默认值（仅本地联调，上线必须用环境变量覆盖）。
+    - **旧令牌全部失效**，前端 localStorage 里残留的 `wushan_token` / `wushan_admin_session` 需重新登录一次。
+    - 验签失败返回「未持执事令牌，请先入内。」（HTTP 仍是 200，业务码 401，前端按 `body.code !== 0` 抛错）。
+
 ## 验证清单
 
 1. `netstat -ano | grep ":3306"` 有 LISTENING（MySQL）
@@ -82,7 +99,9 @@ npm install --no-audit --no-fund && npm run dev
 4. 端到端：`curl -X POST http://localhost:5173/api/auth/captcha` 返回 `{"code":0,...}`
 5. 首页三接口：`curl -s localhost:8080/api/home/nav`、`/api/home/discourse/list?page=1&size=8`、`/api/home/market/items?page=1&size=12` 均返回 `code:0`
 6. 宝库三接口：`curl -s localhost:8080/api/codex/items`、`/api/codex/spirit-roots`、`/api/codex/realms` 均返回 `code:0`
-7. 后台：`curl -s -X POST localhost:8080/api/admin/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}'` 返回 `code:0` 且带 token；再 `curl -s localhost:8080/api/admin/stats -H "Authorization: Bearer <token>"` 返回 `code:0`
+7. 后台：`curl -s -X POST localhost:8080/api/admin/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}'` 返回 `code:0` 且带 token；再 `curl -s localhost:8080/api/admin/treasury/items -H "Authorization: Bearer <token>"` 返回 `code:0`
+8. 权限闸门：同上把 `admin` 换成 `yy`（role=1）→ 返回 `code:1`「此处只通执事，山友请回前山。」；拿 yy 普通登录的 token 调 `/api/admin/treasury/items` → `code:403`
+9. 令牌签名：把 `base64url("8:admin:<ts>")` 当 Bearer 传进去 → `code:401`「未持执事令牌，请先入内。」（旧版无签名令牌同样被拒）
 
 ## 已知小毛病（不影响运行，未修）
 

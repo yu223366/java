@@ -105,7 +105,8 @@ const mockNav = [
   { key: 'guanshan', label: '观山', en: 'scenery' },
   { key: 'baoku', label: '宝库', en: 'treasury' },
   { key: 'lundao', label: '论道', en: 'discourse' },
-  { key: 'shiji', label: '市集', en: 'market' }
+  { key: 'shiji', label: '市集', en: 'market' },
+  { key: 'paimai', label: '拍卖行', en: 'auction' }
 ]
 
 const mockHotKeywords = [
