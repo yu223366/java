@@ -29,6 +29,12 @@ public class Discourse implements Serializable {
     /** 点赞数 */
     private Integer zan;
 
+    /** 辩论主题（为空即普通论道语录） */
+    private String topic;
+
+    /** 辩论立场：0=正方 1=反方（普通语录为 0） */
+    private Integer side;
+
     /** 排序 */
     private Integer sort;
 

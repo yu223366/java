@@ -43,6 +43,9 @@ public class User implements Serializable {
     /** 权限：0=管理员(执事) 1=普通山友（注册默认 1） */
     private Integer role;
 
+    /** 灵石余额（签到 / 答题 / 拍卖 / 市集 的收支账户） */
+    private Integer spirit;
+
     /** 创建时间 */
     @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
     private LocalDateTime createTime;

@@ -4,6 +4,7 @@
 // 数据接口见 ../api/codex.js —— 前端 mock 可跑，后端接上即用。
 import { ref, computed, watch, onMounted } from 'vue'
 import { codexApi } from '../api/codex'
+import WantedPanel from './WantedPanel.vue'
 import { ELEMENTS, findElement } from '../constants/wuxing'
 import { GRADES, findGrade, CATEGORIES } from '../constants/codex'
 
@@ -121,6 +122,7 @@ function resetGrade() {
 
       <!-- 右侧内容区 -->
       <section class="main">
+        <WantedPanel />
         <!-- 分类页签 -->
         <div class="tabs">
           <div

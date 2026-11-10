@@ -16,6 +16,11 @@ import { adminApi } from './api/admin'
 import { tokenStore, sessionStore, USE_MOCK } from './api/auth'
 import { homeApi } from './api/home'
 import bgYinyang from './assets/bg-yinyang.jpg'
+import AuctionNotice from './components/AuctionNotice.vue'
+import GamePanel from './components/GamePanel.vue'
+import WorldPanel from './components/WorldPanel.vue'
+import SectPanel from './components/SectPanel.vue'
+import ObserverPanel from './components/ObserverPanel.vue'
 
 const accent = ref('#e8412b')
 const accent2 = ref('#ff7a18')
@@ -59,6 +64,13 @@ function onNav(item) {
   if (!item) return
   if (item.key === 'baoku' || item.key === 'cangjing') view.value = 'codex'
   if (item.key === 'paimai') view.value = 'auction'
+  if (item.key === 'xiuxing') view.value = 'game'
+  if (item.key === 'mijing') view.value = 'explore'
+  if (item.key === 'liandan') view.value = 'alchemy'
+  if (item.key === 'duijue') view.value = 'duel'
+  if (item.key === 'chuanshu') view.value = 'letter'
+  if (item.key === 'zongmen') view.value = 'sect'
+  if (item.key === 'guanshantai') view.value = 'observer'
 }
 
 // 首页导航栏「后台」：仅执事（role=0）可见可入；已持执事令牌就直接回后台，否则去登录页
@@ -114,7 +126,9 @@ const hint = computed(() =>
         ? '宝 库 · 功法心得资源灵根秘境 · 按元素与品阶翻检'
         : view.value === 'auction'
           ? '拍 卖 行 · 每 十 分 钟 一 场 · 出 价 五 秒 落 槌'
-          : view.value === 'admin-login'
+          : view.value === 'game'
+            ? '修 行 · 测 灵 根 · 签 到 · 每 日 一 题'
+            : view.value === 'admin-login'
           ? '后 台 · 执 事 入 内 · 此 处 只 通 执 事'
           : view.value === 'admin'
             ? '后 台 · 宝 库 数 据 管 理 · 改 动 即 时 生 效'
@@ -142,6 +156,27 @@ const hint = computed(() =>
         <AuctionPanel
           v-else-if="view === 'auction'"
           key="auction"
+          @to-home="view = 'home'"
+        />
+        <GamePanel
+          v-else-if="view === 'game'"
+          key="game"
+          @to-home="view = 'home'"
+        />
+        <WorldPanel
+          v-else-if="['explore', 'alchemy', 'duel', 'letter'].includes(view)"
+          :key="view"
+          :tab="view"
+          @to-home="view = 'home'"
+        />
+        <SectPanel
+          v-else-if="view === 'sect'"
+          key="sect"
+          @to-home="view = 'home'"
+        />
+        <ObserverPanel
+          v-else-if="view === 'observer'"
+          key="observer"
           @to-home="view = 'home'"
         />
         <HomePanel
@@ -188,6 +223,9 @@ const hint = computed(() =>
 
     <!-- 后台管理页自带状态栏，不再叠一层底部提示 -->
     <div class="hint" v-if="view !== 'admin'">{{ hint }}</div>
+
+    <!-- 全局开拍通知：在线用户无论在哪个页面都能收到（登录 / 注册页不打扰） -->
+    <AuctionNotice v-if="view !== 'login' && view !== 'register'" />
   </div>
 </template>
 

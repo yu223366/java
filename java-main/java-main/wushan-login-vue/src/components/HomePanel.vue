@@ -7,6 +7,9 @@
 // 所有数据接口见 ../api/home.js —— 前端 mock 可跑，后端接上即用。
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { homeApi } from '../api/home'
+import DebatePanel from './DebatePanel.vue'
+import { observerApi } from '../api/sect'
+import { auctionApi } from '../api/auction'
 import { ELEMENTS, findElement } from '../constants/wuxing'
 import { getHistory, addHistory, removeHistory, clearHistory } from '../utils/searchHistory'
 import { highlight } from '../utils/highlight'
@@ -30,9 +33,41 @@ const navItems = ref([
   { key: 'baoku', label: '宝库', en: 'treasury' },
   { key: 'lundao', label: '论道', en: 'discourse' },
   { key: 'shiji', label: '市集', en: 'market' },
-  { key: 'paimai', label: '拍卖行', en: 'auction' }
+  { key: 'paimai', label: '拍卖行', en: 'auction' },
+  { key: 'xiuxing', label: '修行', en: 'cultivation' },
+  { key: 'mijing', label: '秘境', en: 'realm' },
+  { key: 'liandan', label: '炼丹', en: 'alchemy' },
+  { key: 'duijue', label: '对决', en: 'duel' },
+  { key: 'chuanshu', label: '传书', en: 'letters' },
+  { key: 'zongmen', label: '宗门', en: 'sect' },
+  { key: 'guanshantai', label: '观山台', en: 'overview' }
 ])
 const activeNav = ref('guanshan')
+/* 导航徽标：各入口的实时状态（未读 / 在线 / 拍卖进行中 / 已测灵根） */
+const badges = ref({})
+let badgeTimer = null
+
+async function loadBadges() {
+  try {
+    const [b, a] = await Promise.all([
+      observerApi.badges().catch(() => null),
+      auctionApi.getStatus().catch(() => null)
+    ])
+    if (b) badges.value = b
+    if (a) badges.value = { ...badges.value, auctionLive: a.phase === 'bidding' }
+  } catch (e) { /* 徽标失败不影响页面 */ }
+}
+
+function badgeOf(key) {
+  const b = badges.value || {}
+  if (key === 'chuanshu' && b.unread > 0) return b.unread > 99 ? '99+' : String(b.unread)
+  if (key === 'guanshantai' && b.online > 0) return String(b.online)
+  if (key === 'paimai' && b.auctionLive) return '拍'
+  if (key === 'xiuxing' && b.hasSpirit) return '命'
+  if (key === 'baoku' && b.treasures > 0) return String(b.treasures)
+  if (key === 'duijue' && b.myBids > 0) return String(b.myBids)
+  return ''
+}
 // 各导航内容的懒加载标记：首次切入时才拉数据
 const navLoaded = ref({ guanshan: true })
 
@@ -71,8 +106,8 @@ function preloadNavBg() {
 
 function switchNav(item) {
   activeNav.value = item.key
-  // 宝库 → 宝库页；拍卖行 → 拍卖行页（均 App 层切视图）；观山/论道/市集在首页内切换内容
-  if (item.key === 'baoku' || item.key === 'paimai') {
+  // 宝库 → 宝库页；拍卖行 → 拍卖行页；修行 → 修行洞府（均 App 层切视图）；观山/论道/市集在首页内切换内容
+  if (['baoku', 'paimai', 'xiuxing', 'mijing', 'liandan', 'duijue', 'chuanshu', 'zongmen', 'guanshantai'].includes(item.key)) {
     emit('nav', item)
     return
   }
@@ -623,6 +658,9 @@ onMounted(async () => {
   // 分类树 / 品阶字典（分级分类筛选用，接口失败不阻塞页面）
   homeApi.getCategories().then((l) => { if (l && l.length) categories.value = l }).catch(() => {})
   homeApi.getGrades().then((l) => { if (l && l.length) grades.value = l }).catch(() => {})
+  // 导航徽标：5 秒刷新一次
+  loadBadges()
+  badgeTimer = setInterval(loadBadges, 20000)
   homeApi.getUserInfo(props.username)
     .then((u) => { userText.value = u.username || props.username || '雾山行者' })
     .catch(() => { userText.value = props.username || '雾山行者' })
@@ -637,6 +675,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocMouseDown)
   window.removeEventListener('keydown', onGlobalKey)
+  clearInterval(badgeTimer)
   cancelSuggest()
   clearTimeout(dqMsgTimer)
   clearTimeout(mkMsgTimer)
@@ -671,6 +710,7 @@ onBeforeUnmount(() => {
           @click="switchNav(item)"
         >
           {{ item.label }}<small>{{ item.en }}</small>
+          <span v-if="badgeOf(item.key)" class="nav-badge">{{ badgeOf(item.key) }}</span>
         </div>
       </nav>
 
@@ -1029,6 +1069,7 @@ onBeforeUnmount(() => {
 
       <!-- ============ 论道堂（导航「论道」：登台发表 + 服务端点赞 + 分页） ============ -->
       <section class="block lundao-panel" v-if="activeNav === 'lundao'">
+        <DebatePanel />
         <h2 class="block-title">论 道 台</h2>
         <p class="block-sub">山友之言 · 以赞为证 · 登台一语</p>
 
@@ -1248,6 +1289,31 @@ onBeforeUnmount(() => {
   border: 1px solid transparent;
   transition: 0.2s;
   text-align: center;
+  position: relative;
+}
+/* 入口徽标：未读 / 在线 / 拍卖进行中 */
+.nav-badge {
+  position: absolute;
+  top: -7px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #f6ece0;
+  background: #a3311f;
+  border: 1px solid #c8543c;
+  border-radius: 9px;
+  box-shadow: 0 0 10px rgba(232, 65, 43, 0.5);
+  animation: badge-pulse 2.4s ease-in-out infinite;
+}
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
 }
 .nav-item small {
   display: block;

@@ -41,8 +41,9 @@ netstat -ano | findstr ":5173" | findstr "LISTENING" >nul
 if errorlevel 1 (
     echo [警告] 前端 5173 未就绪，请查看 wushan-login-vue\_vite.log
 ) else (
-    echo [就绪] 前端  http://192.168.68.38:5173
-    start "" "http://192.168.68.38:5173"
+    echo [就绪] 前端  http://localhost:5173
+    rem 局域网访问：本机执行 ipconfig 查当前 IP，用 http://当前IP:5173 打开
+    start "" "http://localhost:5173"
 )
 rem ------------------------------------------------------------
 rem  前端「假就绪」排查（2026-10-26 新增）：
