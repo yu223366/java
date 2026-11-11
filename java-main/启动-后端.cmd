@@ -2,36 +2,36 @@
 chcp 936 >nul
 setlocal
 rem ============================================================
-rem  Æô¶¯ºó¶Ë springBootTest£¨ÎíÉ½ÎåÐÐÈÏÖ¤·þÎñ£¬¶Ë¿Ú 8080£©
-rem  ×¢Òâ£º±ØÐëÏÔÊ½Ö¸¶¨ --server.port=8080£¬
-rem  ·ñÔò±¾»ú SERVER__PORT »·¾³±äÁ¿»á¸²¸ÇÅäÖÃµ¼ÖÂ°ó¶¨Ê§°Ü¡£
+rem  ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ springBootTestï¿½ï¿½ï¿½ï¿½É½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ñ£¬¶Ë¿ï¿½ 8080ï¿½ï¿½
+rem  ×¢ï¿½â£ºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê½Ö¸ï¿½ï¿½ --server.port=8080ï¿½ï¿½
+rem  ï¿½ï¿½ï¿½ò±¾»ï¿½ SERVER__PORT ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á¸²ï¿½ï¿½ï¿½ï¿½ï¿½Ãµï¿½ï¿½Â°ï¿½Ê§ï¿½Ü¡ï¿½
 rem ============================================================
 cd /d "%~dp0springBootTest"
 
-rem ÒÑÔÚÔËÐÐÔòÌø¹ý
+rem ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 netstat -ano | findstr ":8080" | findstr "LISTENING" >nul
 if not errorlevel 1 (
-    echo [Ìø¹ý] ºó¶ËÒÑÔÚ 8080 ¶Ë¿ÚÔËÐÐ¡£
+    echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 8080 ï¿½Ë¿ï¿½ï¿½ï¿½ï¿½Ð¡ï¿½
     exit /b 0
 )
 
 rem ------------------------------------------------------------
-rem  MySQL ±í½á¹¹ÃÝµÈ²¹Æë£¨2026-10-16 ÐÞ¸´£©£º
-rem  ¾ÉÂß¼­Ö»ÔÚ wushan ¿âÕûÌåÈ±Ê§Ê±Ö´ÐÐ schema.sql£¬µ¼ÖÂ¿âÔÚ¡¢
-rem  ±íÈ±Ê§Ê±£¨ÈçÖØÖÃ¿ìÕÕÖ»Áô wushan_user£©Ê×Ò³/²Ø¾­½Ó¿ÚÈ«²¿ 500¡£
-rem  ÐÂÂß¼­Öð±íÌ½²â£¬È±ÄÄÕÅ±íÓ¦ÓÃÄÄ¸ö½Å±¾£¬Ë³ÐòÓÐÒÀÀµÎðµ÷»»£º
-rem    wushan_user        ¡ú schema.sql        £¨ÈÏÖ¤£ºÉ½¼®±í£©
-rem    wushan_category    ¡ú schema-home.sql   £¨Ê×Ò³£º·ÖÀà/Æ·½×/ÌõÄ¿/µ¼º½/ÈÈ´Ê/¹«¸æ/ËÄÊ±/ÂÛµÀ/ËÑË÷ÈÕÖ¾£©
-rem    wushan_market_item ¡ú upgrade-nav.sql   £¨ÊÐ¼¯ÎïÆ·/½»Ò×ÈÕÖ¾ + ÂÛµÀÓë·ÖÀàÀ©³äÖÖ×Ó£©
-rem    wushan_spirit_root ¡ú upgrade-codex.sql £¨²Ø¾­¸ó£ºÁé¸ù/ÃØ¾³£©
-rem    wushan_user.role   ¡ú upgrade-role.sql  £¨È¨ÏÞ×Ö¶Î£º0=¹ÜÀíÔ± 1=ÆÕÍ¨É½ÓÑ£¬È±ÁÐÊ±×Ô¶¯²¹£©
+rem  MySQL ï¿½ï¿½ï¿½á¹¹ï¿½ÝµÈ²ï¿½ï¿½ë£¨2026-10-16 ï¿½Þ¸ï¿½ï¿½ï¿½ï¿½ï¿½
+rem  ï¿½ï¿½ï¿½ß¼ï¿½Ö»ï¿½ï¿½ wushan ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È±Ê§Ê±Ö´ï¿½ï¿½ schema.sqlï¿½ï¿½ï¿½ï¿½ï¿½Â¿ï¿½ï¿½Ú¡ï¿½
+rem  ï¿½ï¿½È±Ê§Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½Ö»ï¿½ï¿½ wushan_userï¿½ï¿½ï¿½ï¿½Ò³/ï¿½Ø¾ï¿½ï¿½Ó¿ï¿½È«ï¿½ï¿½ 500ï¿½ï¿½
+rem  ï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½ï¿½Ì½ï¿½â£¬È±ï¿½ï¿½ï¿½Å±ï¿½Ó¦ï¿½ï¿½ï¿½Ä¸ï¿½ï¿½Å±ï¿½ï¿½ï¿½Ë³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+rem    wushan_user        ï¿½ï¿½ schema.sql        ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½É½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+rem    wushan_category    ï¿½ï¿½ schema-home.sql   ï¿½ï¿½ï¿½ï¿½Ò³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/Æ·ï¿½ï¿½/ï¿½ï¿½Ä¿/ï¿½ï¿½ï¿½ï¿½/ï¿½È´ï¿½/ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½Ê±/ï¿½Ûµï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½
+rem    wushan_market_item ï¿½ï¿½ upgrade-nav.sql   ï¿½ï¿½ï¿½Ð¼ï¿½ï¿½ï¿½Æ·/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ + ï¿½Ûµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó£ï¿½
+rem    wushan_spirit_root ï¿½ï¿½ upgrade-codex.sql ï¿½ï¿½ï¿½Ø¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½Ø¾ï¿½ï¿½ï¿½
+rem    wushan_user.role   ï¿½ï¿½ upgrade-role.sql  ï¿½ï¿½È¨ï¿½ï¿½ï¿½Ö¶Î£ï¿½0=ï¿½ï¿½ï¿½ï¿½Ô± 1=ï¿½ï¿½Í¨É½ï¿½Ñ£ï¿½È±ï¿½ï¿½Ê±ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½
 rem ------------------------------------------------------------
 set "MYSQL=C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
 set "DB=src\main\resources\db"
 if exist "%MYSQL%" (
     "%MYSQL%" -uroot -p123456 -e "USE wushan" 2>nul
     if errorlevel 1 (
-        echo [³õÊ¼»¯] Î´¼ì²âµ½ wushan Êý¾Ý¿â£¬ÕýÔÚÖ´ÐÐ schema.sql ...
+        echo [ï¿½ï¿½Ê¼ï¿½ï¿½] Î´ï¿½ï¿½âµ½ wushan ï¿½ï¿½ï¿½Ý¿â£¬ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ schema.sql ...
         "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%DB%\schema.sql"
     )
 
@@ -40,41 +40,42 @@ if exist "%MYSQL%" (
     call :ensure_table wushan_market_item "%DB%\upgrade-nav.sql"
     call :ensure_table wushan_spirit_root "%DB%\upgrade-codex.sql"
     call :ensure_column wushan_user role  "%DB%\upgrade-role.sql"
-rem µÚ¶þÂÖÍæ·¨Éý¼¶£ºÁ½¸ö½Å±¾È«²¿ÃÝµÈ£¬Ã¿´ÎÆô¶¯²¹ÆëÐÂÁÐ / ÐÂ±í / ÖÖ×Ó
+rem ï¿½Ú¶ï¿½ï¿½ï¿½ï¿½æ·¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å±ï¿½È«ï¿½ï¿½ï¿½ÝµÈ£ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ / ï¿½Â±ï¿½ / ï¿½ï¿½ï¿½ï¿½
 "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%DB%\upgrade-v2-items.sql" >nul 2>&1
 "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%DB%\upgrade-v2-play.sql" >nul 2>&1
+"%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%DB%\upgrade-v2-admin.sql" >nul 2>&1
 ) else (
-    echo [¾¯¸æ] Î´ÕÒµ½ MySQL ¿Í»§¶Ë %MYSQL%£¬Ìø¹ý½¨±í¼ì²é¡£
-    echo [¾¯¸æ] Èô±íÈ±Ê§£¬Ê×Ò³/²Ø¾­½Ó¿Ú½«±¨´í£¬ÇëÏÈÆô¶¯ MySQL80 ·þÎñ¡£
+    echo [ï¿½ï¿½ï¿½ï¿½] Î´ï¿½Òµï¿½ MySQL ï¿½Í»ï¿½ï¿½ï¿½ %MYSQL%ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é¡£
+    echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½È±Ê§ï¿½ï¿½ï¿½ï¿½Ò³/ï¿½Ø¾ï¿½ï¿½Ó¿Ú½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ MySQL80 ï¿½ï¿½ï¿½ï¿½
 )
 
-echo [Æô¶¯] ºó¶Ë±àÒëÆô¶¯ÖÐ£¨target ±»É¾»á×Ô¶¯ÖØ±àÒë£¬Ô¼ 30 Ãë£©...
-rem Çå¿Õ¾ÉÈÕÖ¾£º·ñÔòÉÏÒ»´ÎµÄ±¨´í»á»ì½ø±¾´ÎÅÅ²é
+echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½Ë±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½target ï¿½ï¿½É¾ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½Ø±ï¿½ï¿½ë£¬Ô¼ 30 ï¿½ë£©...
+rem ï¿½ï¿½Õ¾ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ÎµÄ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å²ï¿½
 if exist "_run.log" del /f /q "_run.log" >nul 2>&1
 start "wushan-backend" /min cmd /c "mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=8080 > _run.log 2>&1"
-echo [Íê³É] ºó¶ËÒÑÔÚºóÌ¨Æô¶¯£¬ÈÕÖ¾£ºspringBootTest\_run.log
+echo [ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Úºï¿½Ì¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½springBootTest\_run.log
 exit /b 0
 
 rem ------------------------------------------------------------
-rem  ×Ó³ÌÐò£º±í²»´æÔÚÔòÖ´ÐÐ¶ÔÓ¦ SQL ½Å±¾
-rem    %1 = ±íÃû    %2 = SQL ½Å±¾Â·¾¶£¨Ïà¶Ô springBootTest Ä¿Â¼£©
+rem  ï¿½Ó³ï¿½ï¿½ò£º±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½Ð¶ï¿½Ó¦ SQL ï¿½Å±ï¿½
+rem    %1 = ï¿½ï¿½ï¿½ï¿½    %2 = SQL ï¿½Å±ï¿½Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ springBootTest Ä¿Â¼ï¿½ï¿½
 rem ------------------------------------------------------------
 :ensure_table
 "%MYSQL%" -uroot -p123456 -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='wushan' AND table_name='%1'" 2>nul | findstr /b "1" >nul
 if errorlevel 1 (
-    echo [³õÊ¼»¯] È±ÉÙ±í %1£¬ÕýÔÚÖ´ÐÐ %~nx3 ...
+    echo [ï¿½ï¿½Ê¼ï¿½ï¿½] È±ï¿½Ù±ï¿½ %1ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ %~nx3 ...
     "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%2"
 )
 exit /b 0
 
 rem ------------------------------------------------------------
-rem  ×Ó³ÌÐò£ºÁÐ²»´æÔÚÔòÖ´ÐÐ¶ÔÓ¦ SQL ½Å±¾
-rem    %1 = ±íÃû    %2 = ÁÐÃû    %3 = SQL ½Å±¾Â·¾¶£¨Ïà¶Ô springBootTest Ä¿Â¼£©
+rem  ï¿½Ó³ï¿½ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½Ð¶ï¿½Ó¦ SQL ï¿½Å±ï¿½
+rem    %1 = ï¿½ï¿½ï¿½ï¿½    %2 = ï¿½ï¿½ï¿½ï¿½    %3 = SQL ï¿½Å±ï¿½Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ springBootTest Ä¿Â¼ï¿½ï¿½
 rem ------------------------------------------------------------
 :ensure_column
 "%MYSQL%" -uroot -p123456 -N -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='wushan' AND table_name='%1' AND column_name='%2'" 2>nul | findstr /b "1" >nul
 if errorlevel 1 (
-    echo [³õÊ¼»¯] ±í %1 È±ÉÙ×Ö¶Î %2£¬ÕýÔÚÖ´ÐÐ %~nx3 ...
+    echo [ï¿½ï¿½Ê¼ï¿½ï¿½] ï¿½ï¿½ %1 È±ï¿½ï¿½ï¿½Ö¶ï¿½ %2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ %~nx3 ...
     "%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%3"
 )
 exit /b 0

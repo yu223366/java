@@ -46,6 +46,12 @@ public class User implements Serializable {
     /** 灵石余额（签到 / 答题 / 拍卖 / 市集 的收支账户） */
     private Integer spirit;
 
+    /**
+     * 山籍注销标记（软注销）：0=正常 1=已注销。
+     * 走软注销而非硬删，避免级联破坏寄售 / 宗门 / 论道 等外键依赖，且可恢复。
+     */
+    private Integer deleted;
+
     /** 创建时间 */
     @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
     private LocalDateTime createTime;

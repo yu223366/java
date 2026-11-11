@@ -6,11 +6,23 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { adminApi } from '../api/admin'
 import { ELEMENTS, findElement } from '../constants/wuxing'
 import { GRADES, CATEGORIES, findGrade } from '../constants/codex'
+import UserManagePanel from './UserManagePanel.vue'
 
 const props = defineProps({
   username: { type: String, default: '' }
 })
 const emit = defineEmits(['logout', 'to-home'])
+
+/* 顶层分区：宝库（三库管理）| 山友（用户系统） */
+const section = ref('treasury')
+const SECTIONS = [
+  { key: 'treasury', label: '宝 库' },
+  { key: 'users', label: '山 友' }
+]
+function switchSection(k) {
+  if (section.value === k) return
+  section.value = k
+}
 
 /* ------------------------------ 字典选项 ------------------------------ */
 const elOptions = ELEMENTS.map((e) => ({ value: e.key, label: e.label }))
@@ -257,7 +269,21 @@ onMounted(loadList)
       </div>
     </header>
 
+    <!-- 分区切换：宝库 / 山友 -->
+    <nav class="sec-tabs">
+      <button
+        v-for="s in SECTIONS"
+        :key="s.key"
+        class="sec-tab"
+        :class="{ 'is-on': section === s.key }"
+        @click="switchSection(s.key)"
+      >
+        {{ s.label }}
+      </button>
+    </nav>
+
     <!-- 库切换 -->
+    <template v-if="section === 'treasury'">
     <nav class="tabs">
       <button
         v-for="k in KINDS"
@@ -365,6 +391,10 @@ onMounted(loadList)
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- 山友管理（用户系统） -->
+    <UserManagePanel v-else :username="username" />
   </div>
 </template>
 
@@ -494,6 +524,34 @@ onMounted(loadList)
 .mini.danger:hover {
   border-color: #e8412b;
   color: #e8412b;
+}
+/* ------------------------------ 分区页签 ------------------------------ */
+.sec-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.sec-tab {
+  padding: 10px 30px;
+  font-size: 16px;
+  letter-spacing: 6px;
+  font-family: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.sec-tab:hover {
+  color: var(--paper);
+}
+.sec-tab.is-on {
+  color: #fff8ee;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px rgba(232, 65, 43, 0.3);
 }
 /* ------------------------------ 页签 ------------------------------ */
 .tabs {
