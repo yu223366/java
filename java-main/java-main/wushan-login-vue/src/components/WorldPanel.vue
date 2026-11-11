@@ -14,6 +14,8 @@ const emit = defineEmits(['to-home'])
 const TITLES = {
   explore: { seal: '秘\n境', name: '秘境', sub: '一 探 幽 窟 · 材 料 尽 归' },
   alchemy: { seal: '炼\n丹', name: '炼丹', sub: '文 火 武 火 · 尽 在 一 炉' },
+  lianqi: { seal: '炼\n器', name: '炼器', sub: '金 铁 入 炉 · 器 成 待 主' },
+  zhenfa: { seal: '阵\n法', name: '阵法', sub: '阵 眼 方 位 · 一 笔 定 乾 坤' },
   duel: { seal: '对\n决', name: '五行问', sub: '五 题 定 胜 负' },
   letter: { seal: '传\n书', name: '传书', sub: '一 纸 心 事 · 越 山 河' }
 }
@@ -31,10 +33,13 @@ const explorePath = ref([])
 const exploreRewards = ref([])
 const exploreDone = ref(false)
 const exploring = ref(false)
+const fortune = ref(null)
 
-/* 炼丹 */
+/* 炼丹 / 炼器 / 阵法 */
 const recipes = ref([])
 const crafting = ref(false)
+const craftResult = ref(null)
+const CRAFT_TYPES = { alchemy: 'danyao', lianqi: 'lianqi', zhenfa: 'zhenfa' }
 
 /* 对决 */
 const duel = ref(null)
@@ -88,6 +93,7 @@ async function enterRealm(realm) {
     explorePath.value = []
     exploreRewards.value = []
     exploreDone.value = false
+    fortune.value = null
   } catch (e) {
     err.value = e.message || '入秘境失败'
   } finally {
@@ -101,11 +107,15 @@ async function choose(i) {
   try {
     const r = await worldApi.exploreChoose(i)
     explorePath.value = r.path || explorePath.value
+    if (r.fortune) {
+      fortune.value = r.fortune
+      flash('奇 遇 · ' + r.fortune.name + '！')
+    }
     if (r.done) {
       exploreDone.value = true
       exploreRewards.value = r.rewards || []
       node.value = null
-      flash('秘境归来，所获已入背包')
+      if (!r.fortune) flash('秘境归来，所获已入背包')
       await loadBag()
     } else {
       node.value = r.node
@@ -120,16 +130,18 @@ async function choose(i) {
 
 async function loadRecipes() {
   try {
-    recipes.value = await worldApi.getRecipes()
+    recipes.value = await worldApi.getRecipes(CRAFT_TYPES[props.tab] || null)
   } catch (e) { err.value = e.message }
 }
 
 async function craft(r) {
   if (crafting.value) return
   crafting.value = true
+  craftResult.value = null
   try {
     const res = await worldApi.craft(r.id)
-    flash(`炼成「${res.outputTitle}」×${res.outputCount}`)
+    craftResult.value = res
+    flash(res.success ? `炼成「${res.outputTitle}」×${res.outputCount}` : '炉毁了 · ' + res.message)
     await Promise.all([loadRecipes(), loadBag()])
   } catch (e) {
     flash(e.message || '炼制失败')
@@ -239,7 +251,7 @@ const conversations = computed(() => {
 async function loadForTab() {
   err.value = ''
   if (props.tab === 'explore') { loadRealms(); loadBag(); loadExploreLogs() }
-  if (props.tab === 'alchemy') { loadRecipes(); loadBag() }
+  if (['alchemy', 'lianqi', 'zhenfa'].includes(props.tab)) { loadRecipes(); loadBag() }
   if (props.tab === 'duel') { loadDuel(); loadBag() }
   if (props.tab === 'letter') { loadInbox() }
 }
@@ -297,6 +309,14 @@ watch(() => props.tab, loadForTab)
 
           <div v-else-if="exploreDone" class="node-card">
             <div class="node-head"><span class="node-title">归 来</span></div>
+            <!-- 奇遇：偶尔撞见，额外灵石与稀有材料一并计入所得 -->
+            <div v-if="fortune" class="fortune-card">
+              <span class="ft-tag">奇 遇</span>
+              <strong>{{ fortune.name }}</strong>
+              <p>{{ fortune.desc }}</p>
+              <span v-if="fortune.spirit" class="ft-gain">+{{ fortune.spirit }} 灵石</span>
+              <span v-if="fortune.itemTitle" class="ft-gain">{{ fortune.itemTitle }} ×{{ fortune.itemCount }}</span>
+            </div>
             <p class="node-desc">此行所得：</p>
             <div class="reward-list">
               <div v-for="(r, i) in exploreRewards" :key="i" class="reward">
@@ -307,7 +327,7 @@ watch(() => props.tab, loadForTab)
             <div class="path-list">
               <span v-for="(p, i) in explorePath" :key="i" class="path-item">{{ p }}</span>
             </div>
-            <button class="main-btn" @click="node = null; exploreDone = false">再 探 一 处</button>
+            <button class="main-btn" @click="node = null; exploreDone = false; fortune = null">再 探 一 处</button>
           </div>
 
           <div v-else>
@@ -330,14 +350,26 @@ watch(() => props.tab, loadForTab)
           </div>
         </template>
 
-        <!-- ============ 炼丹 ============ -->
-        <template v-else-if="tab === 'alchemy'">
-          <h3 class="sec-title">丹 方 谱</h3>
+        <!-- ============ 炼丹 / 炼器 / 阵法（均有失败概率） ============ -->
+        <template v-else-if="['alchemy', 'lianqi', 'zhenfa'].includes(tab)">
+          <h3 class="sec-title">
+            {{ tab === 'lianqi' ? '器 谱' : tab === 'zhenfa' ? '阵 图 谱' : '丹 方 谱' }}
+            <small>火 候 有 失 · 成 败 有 数</small>
+          </h3>
+          <p class="craft-tip">材料可在首页「市集」的丹药 / 炼器 / 阵法材料铺按品质用灵石购买，购得即入背包。</p>
+
+          <div v-if="craftResult" class="craft-result" :class="{ fail: !craftResult.success }">
+            <span class="cr-tag">{{ craftResult.success ? '功 成' : '炉 毁' }}</span>
+            <span>{{ craftResult.message }}</span>
+            <span v-if="!craftResult.success" class="cr-refund">退回 {{ craftResult.refund }} 灵石</span>
+          </div>
+
           <div class="recipe-list">
             <div v-for="r in recipes" :key="r.id" class="recipe">
               <div class="recipe-head">
                 <span class="recipe-name">{{ r.name }}</span>
-                <span class="recipe-tag">{{ r.category === 'danyao' ? '丹' : '器' }}</span>
+                <span class="recipe-tag">{{ r.craftLabel }}</span>
+                <span class="recipe-rate" :class="{ low: r.successRate < 60 }">成 率 {{ r.successRate }}%</span>
                 <span class="recipe-out">出 {{ r.outputTitle }} ×{{ r.outputCount }}</span>
                 <span class="recipe-made" v-if="bagHas(r.outputItemId)">已 炼</span>
               </div>
@@ -352,7 +384,7 @@ watch(() => props.tab, loadForTab)
                 <span class="mat-chip cost">耗 {{ r.costSpirit }} 灵石</span>
               </div>
               <button class="main-btn" :disabled="!r.enough || crafting" @click="craft(r)">
-                {{ r.enough ? '开 炉 炼 制' : '材 料 不 足' }}
+                {{ r.enough ? (tab === 'zhenfa' ? '开 坛 布 阵' : tab === 'lianqi' ? '开 炉 炼 器' : '开 炉 炼 丹') : '材 料 不 足' }}
               </button>
             </div>
           </div>
@@ -599,6 +631,28 @@ watch(() => props.tab, loadForTab)
 
 /* 炼丹 */
 .recipe-list { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- 奇遇 / 炼制成败 ---------- */
+.fortune-card {
+  position: relative; margin: 0 0 18px; padding: 14px 18px;
+  border: 1px solid rgba(232, 195, 114, 0.55);
+  background: linear-gradient(120deg, rgba(232, 195, 114, 0.12), rgba(163, 49, 31, 0.08));
+}
+.ft-tag { position: absolute; right: 14px; top: 12px; font-size: 11px; letter-spacing: 3px; color: #e8c372; }
+.fortune-card strong { font-size: 19px; letter-spacing: 4px; color: #e8c372; font-weight: normal; }
+.fortune-card p { margin: 8px 0; font-size: 13px; line-height: 1.9; color: rgba(236, 228, 210, 0.85); }
+.ft-gain { display: inline-block; margin-right: 10px; font-size: 12px; letter-spacing: 1px; color: #97c459; }
+.craft-tip { margin: -6px 0 16px; font-size: 12px; line-height: 1.9; color: var(--muted); letter-spacing: 1px; }
+.craft-result {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; margin-bottom: 16px; font-size: 13px; line-height: 1.8;
+  border: 1px solid rgba(151, 196, 89, 0.5); background: rgba(151, 196, 89, 0.09); color: #d6e8bd;
+}
+.craft-result.fail { border-color: rgba(232, 65, 43, 0.5); background: rgba(232, 65, 43, 0.09); color: #f0c9b8; }
+.cr-tag { font-size: 12px; letter-spacing: 3px; color: #e8c372; }
+.cr-refund { margin-left: auto; font-size: 12px; color: #e8c372; }
+.recipe-rate { font-size: 11px; letter-spacing: 1px; color: #97c459; }
+.recipe-rate.low { color: #e8412b; }
 .recipe { padding: 16px 18px; border: 1px solid var(--line); background: rgba(236, 228, 210, 0.04); }
 .recipe-head { display: flex; align-items: baseline; gap: 12px; }
 .recipe-name { font-size: 20px; letter-spacing: 4px; }

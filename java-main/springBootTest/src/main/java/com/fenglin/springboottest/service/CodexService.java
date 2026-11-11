@@ -5,6 +5,8 @@ import com.fenglin.springboottest.controller.dto.PageVo;
 import com.fenglin.springboottest.controller.dto.RealmVo;
 import com.fenglin.springboottest.controller.dto.SpiritRootVo;
 
+import java.util.Map;
+
 /**
  * 宝库业务：功法 / 心得 / 修炼资源条目 + 灵根 + 秘境。
  * 对接前端 src/api/codex.js 的接口契约（BASE_URL=/api）。
@@ -19,6 +21,9 @@ public interface CodexService {
      * @param q        关键词（模糊匹配条目名 / 简介）
      */
     PageVo<ItemVo> items(String element, String category, String grade, String q);
+
+    /** 单件物品详情：全文介绍 / 获取途径 / 用途 / 品质基准价 */
+    Map<String, Object> itemDetail(Long id);
 
     /** 灵根列表（element / grade 筛选） */
     PageVo<SpiritRootVo> spiritRoots(String element, String grade);

@@ -69,8 +69,9 @@ public class WorldController {
 
     @GetMapping("/recipes")
     public Result<List<Map<String, Object>>> recipes(
-            @RequestHeader(value = "Authorization", required = false) String authorization) {
-        return Result.ok(worldService.recipes(authorization));
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestParam(required = false) String type) {
+        return Result.ok(worldService.recipes(authorization, type));
     }
 
     @PostMapping("/craft")

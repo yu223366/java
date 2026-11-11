@@ -74,8 +74,9 @@ export const worldApi = {
   getExploreLogs() {
     return request('/world/explore/logs')
   },
-  getRecipes() {
-    return request('/world/recipes')
+  /** type: danyao 炼丹 / lianqi 炼器 / zhenfa 阵法；不传取全部 */
+  getRecipes(type) {
+    return request('/world/recipes', { query: { type } })
   },
   craft(recipeId) {
     return request('/world/craft', { method: 'POST', query: { recipeId } })

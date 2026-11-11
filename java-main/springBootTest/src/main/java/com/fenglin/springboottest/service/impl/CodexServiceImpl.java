@@ -1,6 +1,7 @@
 package com.fenglin.springboottest.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fenglin.springboottest.common.BizException;
 import com.fenglin.springboottest.controller.dto.*;
 import com.fenglin.springboottest.entity.*;
 import com.fenglin.springboottest.mapper.*;
@@ -166,7 +167,37 @@ public class CodexServiceImpl implements CodexService {
             vo.setGrade(g.getGradeKey());
             vo.setGradeLabel(g.getName());
         }
+        vo.setDetail(it.getDetail() == null ? "" : it.getDetail());
+        vo.setAcquire(it.getAcquire() == null ? "" : it.getAcquire());
+        vo.setEffect(it.getEffect() == null ? "" : it.getEffect());
+        vo.setGradePrice(it.getGradePrice() == null ? 0 : it.getGradePrice());
         return vo;
+    }
+
+    @Override
+    public Map<String, Object> itemDetail(Long id) {
+        if (id == null) throw new BizException("未指定条目");
+        Item it = itemMapper.selectById(id);
+        if (it == null) throw new BizException("库中查无此物");
+        Map<Long, Category> catMap = categoryMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Category::getId, c -> c));
+        Map<String, Grade> gradeMap = gradeMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Grade::getGradeKey, g -> g));
+        ItemVo vo = toItemVo(it, catMap, gradeMap);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", vo.getId());
+        out.put("title", vo.getTitle());
+        out.put("desc", vo.getDesc());
+        out.put("detail", vo.getDetail().isEmpty() ? vo.getDesc() : vo.getDetail());
+        out.put("element", vo.getElement());
+        out.put("category", vo.getCategory());
+        out.put("categoryLabel", vo.getCategoryLabel());
+        out.put("grade", vo.getGrade());
+        out.put("gradeLabel", vo.getGradeLabel());
+        out.put("acquire", vo.getAcquire());
+        out.put("effect", vo.getEffect());
+        out.put("gradePrice", vo.getGradePrice());
+        return out;
     }
 
     /** all / 空 → null（不过滤） */

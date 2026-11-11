@@ -3,7 +3,7 @@
  * 辩场：同一辩题下正反两方各自陈词，票数即点赞数。
  * 嵌在首页「论道」区下方，与普通论道语录并存（辩论语录按 topic 分组）。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { debateApi } from '../api/debate'
 import { findElement } from '../constants/wuxing'
 
@@ -46,6 +46,18 @@ async function publish() {
   }
 }
 
+/** 点赞即投票：一人对一条陈词只能赞一次，正反票数多者胜 */
+async function doLike(say) {
+  if (say.liked) return flash('此言你已赞过')
+  try {
+    const r = await debateApi.like(say.id)
+    flash('已投一票 · 当前' + (r.winnerLabel || ''))
+    await load()
+  } catch (e) {
+    flash(e.message || '点赞失败')
+  }
+}
+
 function toggle(topic) {
   if (openTopic.value === topic) {
     openTopic.value = ''
@@ -79,7 +91,6 @@ function ratio(d) {
   return Math.round(((d.leftZan || 0) / total) * 100)
 }
 
-const lastSay = (arr) => (arr && arr.length ? arr[0] : null)
 onMounted(load)
 </script>
 
@@ -87,7 +98,7 @@ onMounted(load)
   <div class="debate">
     <div class="db-head">
       <span class="db-title">辩 场 · 正 反 两 方</span>
-      <span class="db-sub">同 题 各 陈 其 词 · 赞 即 为 票</span>
+      <span class="db-sub">同 题 各 陈 其 词 · 赞 即 为 票 · 谁 赞 多 谁 赢</span>
       <button class="db-new" @click="showNew = !showNew">{{ showNew ? '收 起' : '开 一 辩 题' }}</button>
     </div>
 
@@ -98,34 +109,39 @@ onMounted(load)
     </div>
 
     <div v-for="d in debates" :key="d.topic" class="db-card">
-      <div class="db-topic">{{ d.topic }}</div>
+      <div class="db-topic">
+        {{ d.topic }}
+        <span class="db-winner" :class="d.winner">{{ d.winnerLabel }}</span>
+      </div>
       <div class="db-vote">
         <span class="v-l" :style="{ width: ratio(d) + '%' }"></span>
-        <span class="v-num">{{ d.leftZan }} : {{ d.rightZan }}</span>
+        <span class="v-num">正 {{ d.leftZan }} : {{ d.rightZan }} 反</span>
       </div>
       <div class="db-sides">
         <div class="db-side left">
-          <div class="side-head"><span class="side-tag">正 方</span></div>
-          <div v-if="lastSay(d.left)" class="say">
-            <span class="say-name" :style="{ color: findElement(lastSay(d.left).element).color }">
-              {{ lastSay(d.left).name }}
-            </span>
-            <p class="say-text">{{ lastSay(d.left).quote }}</p>
+          <div class="side-head"><span class="side-tag">正 方</span><small>{{ d.leftZan }} 票</small></div>
+          <div v-for="say in (d.left || []).slice(0, 3)" :key="say.id" class="say">
+            <span class="say-name" :style="{ color: findElement(say.element).color }">{{ say.name }}</span>
+            <p class="say-text">{{ say.quote }}</p>
+            <button class="like-btn" :class="{ liked: say.liked }" @click="doLike(say)">
+              {{ say.liked ? '已 赞' : '赞' }} · {{ say.zan }}
+            </button>
           </div>
-          <div v-else class="say say-empty">尚 无 人 立 论</div>
+          <div v-if="!d.left || !d.left.length" class="say say-empty">尚 无 人 立 论</div>
         </div>
 
         <div class="db-mid">对<br />阵</div>
 
         <div class="db-side right">
-          <div class="side-head"><span class="side-tag">反 方</span></div>
-          <div v-if="lastSay(d.right)" class="say">
-            <span class="say-name" :style="{ color: findElement(lastSay(d.right).element).color }">
-              {{ lastSay(d.right).name }}
-            </span>
-            <p class="say-text">{{ lastSay(d.right).quote }}</p>
+          <div class="side-head"><span class="side-tag">反 方</span><small>{{ d.rightZan }} 票</small></div>
+          <div v-for="say in (d.right || []).slice(0, 3)" :key="say.id" class="say">
+            <span class="say-name" :style="{ color: findElement(say.element).color }">{{ say.name }}</span>
+            <p class="say-text">{{ say.quote }}</p>
+            <button class="like-btn" :class="{ liked: say.liked }" @click="doLike(say)">
+              {{ say.liked ? '已 赞' : '赞' }} · {{ say.zan }}
+            </button>
           </div>
-          <div v-else class="say say-empty">尚 无 人 应 战</div>
+          <div v-if="!d.right || !d.right.length" class="say say-empty">尚 无 人 应 战</div>
         </div>
       </div>
 
@@ -169,7 +185,20 @@ onMounted(load)
 .db-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .db-card { padding: 16px 18px; margin-bottom: 14px; border: 1px solid var(--line); background: rgba(12, 17, 16, 0.5); }
-.db-topic { font-size: 19px; letter-spacing: 4px; margin-bottom: 10px; }
+.db-topic { display: flex; align-items: center; gap: 12px; font-size: 19px; letter-spacing: 4px; margin-bottom: 10px; }
+.db-winner { margin-left: auto; font-size: 12px; letter-spacing: 2px; padding: 3px 10px; border: 1px solid var(--line); color: var(--muted); }
+.db-winner.left { color: #f0c9b8; border-color: #c8543c; background: rgba(163, 49, 31, 0.18); }
+.db-winner.right { color: #cfe6fa; border-color: #3a8fd0; background: rgba(58, 143, 208, 0.16); }
+.db-winner.draw { color: #e8c372; border-color: rgba(232, 195, 114, 0.5); }
+.side-head { display: flex; align-items: baseline; gap: 8px; }
+.side-head small { font-size: 11px; color: var(--muted); }
+.like-btn {
+  margin-top: 8px; font: inherit; font-size: 11px; letter-spacing: 1px; padding: 3px 10px;
+  color: #e8c372; background: rgba(232, 195, 114, 0.08); border: 1px solid rgba(232, 195, 114, 0.35); cursor: pointer;
+}
+.like-btn:hover { background: rgba(232, 195, 114, 0.2); }
+.like-btn.liked { color: var(--muted); border-color: var(--line); background: none; cursor: default; }
+.say { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed rgba(236, 228, 210, 0.1); }
 .db-vote { position: relative; height: 8px; margin-bottom: 14px; background: rgba(60, 120, 160, 0.25); }
 .db-vote .v-l { display: block; height: 100%; background: linear-gradient(90deg, #8a2f1e, #e8412b); }
 .v-num { position: absolute; right: 0; top: -18px; font-size: 11px; color: var(--muted); }

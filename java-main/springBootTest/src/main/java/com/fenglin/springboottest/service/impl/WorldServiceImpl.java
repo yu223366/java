@@ -32,6 +32,10 @@ public class WorldServiceImpl implements WorldService {
     private static final int DUEL_QUESTIONS = 5;
     /** 炼材类分类 id，秘境掉落从这里出 */
     private static final long MATERIAL_CATEGORY = 9L;
+    /** 每段探索触发奇遇的概率（百分比） */
+    private static final int FORTUNE_CHANCE = 20;
+    /** 炼制失败退还的灵石比例 */
+    private static final int FAIL_REFUND_PERCENT = 20;
 
     /* ------------------------------ 事件库 ------------------------------ */
     private static final class Choice {
@@ -83,6 +87,8 @@ public class WorldServiceImpl implements WorldService {
         List<String> path = new ArrayList<>();
         int spirit;
         Map<Long, Integer> items = new LinkedHashMap<>();
+        /** 本次探索触发的奇遇（最多一条） */
+        Map<String, Object> fortune;
     }
 
     private final Map<Long, Session> sessions = new ConcurrentHashMap<>();
@@ -98,6 +104,7 @@ public class WorldServiceImpl implements WorldService {
     private final GradeMapper gradeMapper;
     private final UserMapper userMapper;
     private final OnlineUserMapper onlineUserMapper;
+    private final FortuneEventMapper fortuneEventMapper;
     private final SpiritWalletService wallet;
     private final ObjectMapper objectMapper;
 
@@ -112,6 +119,7 @@ public class WorldServiceImpl implements WorldService {
                             GradeMapper gradeMapper,
                             UserMapper userMapper,
                             OnlineUserMapper onlineUserMapper,
+                            FortuneEventMapper fortuneEventMapper,
                             SpiritWalletService wallet,
                             ObjectMapper objectMapper) {
         this.userBagMapper = userBagMapper;
@@ -125,6 +133,7 @@ public class WorldServiceImpl implements WorldService {
         this.gradeMapper = gradeMapper;
         this.userMapper = userMapper;
         this.onlineUserMapper = onlineUserMapper;
+        this.fortuneEventMapper = fortuneEventMapper;
         this.wallet = wallet;
         this.objectMapper = objectMapper;
     }
@@ -269,6 +278,29 @@ public class WorldServiceImpl implements WorldService {
             }
         }
 
+        // 偶尔撞上奇遇：按权重抽一条，额外灵石与材料计入本次结算
+        Map<String, Object> triggered = null;
+        if (s.fortune == null && new Random().nextInt(100) < FORTUNE_CHANCE) {
+            FortuneEvent fe = drawFortune();
+            if (fe != null) {
+                triggered = new LinkedHashMap<>();
+                triggered.put("name", fe.getName());
+                triggered.put("desc", fe.getEventDesc() == null ? "" : fe.getEventDesc());
+                triggered.put("spirit", fe.getSpirit() == null ? 0 : fe.getSpirit());
+                triggered.put("itemTitle", fe.getItemTitle() == null ? "" : fe.getItemTitle());
+                triggered.put("itemCount", fe.getItemCount() == null ? 0 : fe.getItemCount());
+                triggered.put("grade", fe.getGradeKey() == null ? "xuan" : fe.getGradeKey());
+                s.fortune = triggered;
+                s.spirit += fe.getSpirit() == null ? 0 : fe.getSpirit();
+                if (fe.getItemTitle() != null && !fe.getItemTitle().isBlank()
+                        && fe.getItemCount() != null && fe.getItemCount() > 0) {
+                    Item lucky = itemMapper.selectOne(Wrappers.<Item>lambdaQuery()
+                            .eq(Item::getTitle, fe.getItemTitle()).last("limit 1"));
+                    if (lucky != null) s.items.merge(lucky.getId(), fe.getItemCount(), Integer::sum);
+                }
+            }
+        }
+
         Map<String, Object> out = new LinkedHashMap<>();
         if (s.step < EXPLORE_STEPS) {
             s.step += 1;
@@ -278,6 +310,7 @@ public class WorldServiceImpl implements WorldService {
             out.put("node", nodeJson(node));
             out.put("gain", c.spirit);
             out.put("path", s.path);
+            out.put("fortune", triggered);
             return out;
         }
 
@@ -303,6 +336,7 @@ public class WorldServiceImpl implements WorldService {
         log.setPathJson(toJson(s.path));
         log.setRewardsJson(toJson(rewardText(s.items, s.spirit)));
         log.setCostSpirit(EXPLORE_COST);
+        log.setFortuneJson(s.fortune == null ? null : toJson(s.fortune));
         log.setCreateTime(LocalDateTime.now());
         exploreLogMapper.insert(log);
         sessions.remove(userId);
@@ -312,6 +346,7 @@ public class WorldServiceImpl implements WorldService {
         out.put("total", EXPLORE_STEPS);
         out.put("path", s.path);
         out.put("rewards", rewardText(s.items, s.spirit));
+        out.put("fortune", s.fortune);
         out.put("balance", wallet.balance(userId));
         return out;
     }
@@ -329,6 +364,7 @@ public class WorldServiceImpl implements WorldService {
             m.put("path", l.getPathJson());
             m.put("rewards", l.getRewardsJson());
             m.put("cost", l.getCostSpirit());
+            m.put("fortune", l.getFortuneJson() == null ? "" : l.getFortuneJson());
             m.put("time", l.getCreateTime() == null ? "" : l.getCreateTime().toString());
             out.add(m);
         }
@@ -337,6 +373,22 @@ public class WorldServiceImpl implements WorldService {
 
     private Node randomNode() {
         return NODES.get(new Random().nextInt(NODES.size()));
+    }
+
+    /** 按权重抽一条奇遇事件 */
+    private FortuneEvent drawFortune() {
+        List<FortuneEvent> list = fortuneEventMapper.selectList(Wrappers.<FortuneEvent>lambdaQuery()
+                .eq(FortuneEvent::getStatus, 1));
+        if (list.isEmpty()) return null;
+        int total = 0;
+        for (FortuneEvent f : list) total += f.getWeight() == null ? 1 : Math.max(1, f.getWeight());
+        int hit = new Random().nextInt(total);
+        int acc = 0;
+        for (FortuneEvent f : list) {
+            acc += f.getWeight() == null ? 1 : Math.max(1, f.getWeight());
+            if (hit < acc) return f;
+        }
+        return list.get(list.size() - 1);
     }
 
     private Long randomMaterialId() {
@@ -381,13 +433,22 @@ public class WorldServiceImpl implements WorldService {
         return out;
     }
 
-    /* ------------------------------ 炼丹炼器 ------------------------------ */
+    /* ------------------------------ 炼丹 / 炼器 / 阵法 ------------------------------ */
     @Override
     public List<Map<String, Object>> recipes(String authorization) {
+        return recipes(authorization, null);
+    }
+
+    @Override
+    public List<Map<String, Object>> recipes(String authorization, String craftType) {
         Object[] u = requireUser(authorization);
         Long userId = (Long) u[0];
+        String type = craftType == null || craftType.isBlank() || "all".equals(craftType)
+                ? null : craftType.trim();
         List<Recipe> list = recipeMapper.selectList(Wrappers.<Recipe>lambdaQuery()
-                .eq(Recipe::getStatus, 1).orderByAsc(Recipe::getId));
+                .eq(Recipe::getStatus, 1)
+                .eq(type != null, Recipe::getCraftType, type)
+                .orderByAsc(Recipe::getId));
         Map<Long, Item> itemMap = itemMap();
         List<Map<String, Object>> out = new ArrayList<>();
         for (Recipe r : list) {
@@ -396,11 +457,16 @@ public class WorldServiceImpl implements WorldService {
             m.put("id", r.getId());
             m.put("name", r.getName());
             m.put("category", r.getCategory());
+            m.put("craftType", r.getCraftType() == null ? "danyao" : r.getCraftType());
+            m.put("craftLabel", craftLabel(r.getCraftType()));
+            m.put("successRate", r.getSuccessRate() == null ? 85 : r.getSuccessRate());
             m.put("outputItemId", r.getOutputItemId());
             m.put("outputTitle", outItem == null ? "未知之物" : outItem.getTitle());
             m.put("outputCount", r.getOutputCount());
             m.put("costSpirit", r.getCostSpirit());
             m.put("description", r.getDescription() == null ? "" : r.getDescription());
+            m.put("detail", outItem == null || outItem.getDetail() == null ? "" : outItem.getDetail());
+            m.put("shopTip", "材料可在市集按品质用灵石购买，购得即入背包");
             List<Map<String, Object>> mats = new ArrayList<>();
             boolean enough = true;
             for (Map<String, Object> mat : parseMaterials(r.getMaterialsJson())) {
@@ -432,6 +498,8 @@ public class WorldServiceImpl implements WorldService {
         if (r == null || r.getStatus() == null || r.getStatus() != 1) {
             throw new BizException("此方已失传");
         }
+        int rate = r.getSuccessRate() == null ? 85 : Math.max(1, Math.min(r.getSuccessRate(), 100));
+        // 材料无论成败都先扣（开炉即耗材），灵石亦先扣
         for (Map<String, Object> mat : parseMaterials(r.getMaterialsJson())) {
             Long mid = ((Number) mat.get("itemId")).longValue();
             int need = ((Number) mat.get("count")).intValue();
@@ -439,16 +507,42 @@ public class WorldServiceImpl implements WorldService {
                 throw new BizException("材料不足，还缺「" + itemTitle(mid) + "」" + need + " 份");
             }
         }
-        wallet.deduct(userId, r.getCostSpirit() == null ? 0 : r.getCostSpirit(), "炼制 · " + r.getName());
-        addItem(userId, r.getOutputItemId(), r.getOutputCount() == null ? 1 : r.getOutputCount());
+        int cost = r.getCostSpirit() == null ? 0 : r.getCostSpirit();
+        wallet.deduct(userId, cost, "开炉 · " + r.getName());
+
+        boolean success = new Random().nextInt(100) < rate;
+        String message;
+        int refund = 0;
+        if (success) {
+            addItem(userId, r.getOutputItemId(), r.getOutputCount() == null ? 1 : r.getOutputCount());
+            message = craftLabel(r.getCraftType()) + "功成，得「" + itemTitle(r.getOutputItemId()) + "」"
+                    + (r.getOutputCount() == null ? 1 : r.getOutputCount()) + " 件。";
+        } else {
+            refund = cost * FAIL_REFUND_PERCENT / 100;
+            if (refund > 0) wallet.add(userId, refund, "炉毁退银 · " + r.getName());
+            message = "火候失了分寸，" + craftLabel(r.getCraftType()) + "未成，材料尽耗"
+                    + (refund > 0 ? "，退回 " + refund + " 灵石。" : "。");
+        }
 
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
+        out.put("ok", success);
+        out.put("success", success);
+        out.put("successRate", rate);
         out.put("name", r.getName());
+        out.put("craftType", r.getCraftType() == null ? "danyao" : r.getCraftType());
+        out.put("craftLabel", craftLabel(r.getCraftType()));
         out.put("outputTitle", itemTitle(r.getOutputItemId()));
-        out.put("outputCount", r.getOutputCount());
+        out.put("outputCount", success ? (r.getOutputCount() == null ? 1 : r.getOutputCount()) : 0);
+        out.put("refund", refund);
+        out.put("message", message);
         out.put("balance", wallet.balance(userId));
         return out;
+    }
+
+    private static String craftLabel(String type) {
+        if ("lianqi".equals(type)) return "炼器";
+        if ("zhenfa".equals(type)) return "布阵";
+        return "炼丹";
     }
 
     /* ------------------------------ 五行问对决 ------------------------------ */

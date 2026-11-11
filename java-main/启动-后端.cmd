@@ -40,6 +40,9 @@ if exist "%MYSQL%" (
     call :ensure_table wushan_market_item "%DB%\upgrade-nav.sql"
     call :ensure_table wushan_spirit_root "%DB%\upgrade-codex.sql"
     call :ensure_column wushan_user role  "%DB%\upgrade-role.sql"
+rem 第二轮玩法升级：两个脚本全部幂等，每次启动补齐新列 / 新表 / 种子
+"%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%DB%\upgrade-v2-items.sql" >nul 2>&1
+"%MYSQL%" -uroot -p123456 --default-character-set=utf8mb4 < "%DB%\upgrade-v2-play.sql" >nul 2>&1
 ) else (
     echo [警告] 未找到 MySQL 客户端 %MYSQL%，跳过建表检查。
     echo [警告] 若表缺失，首页/藏经接口将报错，请先启动 MySQL80 服务。

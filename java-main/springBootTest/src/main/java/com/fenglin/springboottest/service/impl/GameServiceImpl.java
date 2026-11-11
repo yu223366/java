@@ -29,6 +29,20 @@ public class GameServiceImpl implements GameService {
     /** 连续签到 1~7 天的灵石奖励 */
     private static final int[] SIGN_REWARD = {10, 20, 30, 40, 50, 60, 100};
 
+    /** 重测灵根：首测免费，再测每次 100 灵石，且每日至多 5 次 */
+    private static final int RETEST_COST = 100;
+    private static final int RETEST_DAILY_LIMIT = 5;
+
+    /** 每旬一题：十分钟一轮，答对得 5 灵石 */
+    private static final int SLOT_MINUTES = 10;
+    private static final int ANSWER_REWARD = 5;
+
+    /** 练功：30 秒一次，每次 3 灵石 + 10 修为，满 100 修为升一重 */
+    private static final int PRACTICE_COOLDOWN_SECONDS = 30;
+    private static final int PRACTICE_SPIRIT = 3;
+    private static final int PRACTICE_EXP = 10;
+    private static final int PRACTICE_LEVEL_UP_SPIRIT = 20;
+
     /** 测灵根题库：每题 4 个选项，各对应一种五行倾向 */
     private static final class Quiz {
         final String title;
@@ -71,8 +85,9 @@ public class GameServiceImpl implements GameService {
 
     private final SpiritProfileMapper spiritProfileMapper;
     private final SignInMapper signInMapper;
-    private final DailyQuestionMapper dailyQuestionMapper;
-    private final DailyAnswerMapper dailyAnswerMapper;
+    private final QuestionSlotMapper questionSlotMapper;
+    private final QuestionAnswerMapper questionAnswerMapper;
+    private final PracticeMapper practiceMapper;
     private final SpiritRootMapper spiritRootMapper;
     private final GradeMapper gradeMapper;
     private final ItemMapper itemMapper;
@@ -83,8 +98,9 @@ public class GameServiceImpl implements GameService {
 
     public GameServiceImpl(SpiritProfileMapper spiritProfileMapper,
                             SignInMapper signInMapper,
-                            DailyQuestionMapper dailyQuestionMapper,
-                            DailyAnswerMapper dailyAnswerMapper,
+                            QuestionSlotMapper questionSlotMapper,
+                            QuestionAnswerMapper questionAnswerMapper,
+                            PracticeMapper practiceMapper,
                             SpiritRootMapper spiritRootMapper,
                             GradeMapper gradeMapper,
                             ItemMapper itemMapper,
@@ -94,8 +110,9 @@ public class GameServiceImpl implements GameService {
                             ObjectMapper objectMapper) {
         this.spiritProfileMapper = spiritProfileMapper;
         this.signInMapper = signInMapper;
-        this.dailyQuestionMapper = dailyQuestionMapper;
-        this.dailyAnswerMapper = dailyAnswerMapper;
+        this.questionSlotMapper = questionSlotMapper;
+        this.questionAnswerMapper = questionAnswerMapper;
+        this.practiceMapper = practiceMapper;
         this.spiritRootMapper = spiritRootMapper;
         this.gradeMapper = gradeMapper;
         this.itemMapper = itemMapper;
@@ -129,6 +146,20 @@ public class GameServiceImpl implements GameService {
         String username = (String) u[1];
         if (answers == null || answers.size() != QUIZ.size()) {
             throw new BizException("请答完 " + QUIZ.size() + " 题");
+        }
+        // 重测不再无限免费：首测免费，再测每次 100 灵石 + 每日 5 次上限
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        Long todayCount = spiritProfileMapper.selectCount(Wrappers.<SpiritProfile>lambdaQuery()
+                .eq(SpiritProfile::getUserId, userId)
+                .ge(SpiritProfile::getCreateTime, todayStart));
+        Long totalCount = spiritProfileMapper.selectCount(Wrappers.<SpiritProfile>lambdaQuery()
+                .eq(SpiritProfile::getUserId, userId));
+        boolean firstTime = totalCount == null || totalCount == 0;
+        if (!firstTime) {
+            if (todayCount != null && todayCount >= RETEST_DAILY_LIMIT) {
+                throw new BizException("今日已重测 " + RETEST_DAILY_LIMIT + " 次，明日再来");
+            }
+            wallet.deduct(userId, RETEST_COST, "重测灵根");
         }
         Map<String, Integer> scoreMap = new LinkedHashMap<>();
         for (int i = 0; i < QUIZ.size(); i++) {
@@ -173,6 +204,8 @@ public class GameServiceImpl implements GameService {
         out.put("rareLabel", rareLabel(rare));
         out.put("score", max);
         out.put("summary", root.getSummary() == null ? "" : root.getSummary());
+        out.put("retestCost", firstTime ? 0 : RETEST_COST);
+        out.put("balance", wallet.balance(userId));
         return out;
     }
 
@@ -186,8 +219,15 @@ public class GameServiceImpl implements GameService {
         if (p == null) {
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("hasProfile", false);
+            out.put("retestCost", 0);
+            out.put("retestCountToday", 0);
+            out.put("retestLimit", RETEST_DAILY_LIMIT);
+            out.put("canRetest", true);
             return out;
         }
+        Long todayCount = spiritProfileMapper.selectCount(Wrappers.<SpiritProfile>lambdaQuery()
+                .eq(SpiritProfile::getUserId, userId)
+                .ge(SpiritProfile::getCreateTime, LocalDate.now().atStartOfDay()));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("hasProfile", true);
         out.put("rootName", p.getRootName());
@@ -199,6 +239,11 @@ public class GameServiceImpl implements GameService {
         out.put("score", p.getScore());
         out.put("summary", p.getSummary() == null ? "" : p.getSummary());
         out.put("createTime", p.getCreateTime() == null ? "" : p.getCreateTime().toString());
+        out.put("retestCost", RETEST_COST);
+        out.put("retestCountToday", todayCount == null ? 0 : todayCount.intValue());
+        out.put("retestLimit", RETEST_DAILY_LIMIT);
+        out.put("canRetest", (todayCount == null ? 0 : todayCount) < RETEST_DAILY_LIMIT);
+        out.put("balance", wallet.balance(userId));
         return out;
     }
 
@@ -292,27 +337,30 @@ public class GameServiceImpl implements GameService {
         return out;
     }
 
-    /* ------------------------------ 每日一题 ------------------------------ */
+    /* ------------------------------ 每旬一题（十分钟一轮） ------------------------------ */
     @Override
     public Map<String, Object> dailyQuestion(String authorization) {
         Object[] u = requireUser(authorization);
         Long userId = (Long) u[0];
-        LocalDate today = LocalDate.now();
-        DailyQuestion q = dailyQuestionMapper.selectOne(Wrappers.<DailyQuestion>lambdaQuery()
-                .eq(DailyQuestion::getQuestionDate, today));
+        String slot = slotKeyNow();
+        QuestionSlot q = questionSlotMapper.selectOne(Wrappers.<QuestionSlot>lambdaQuery()
+                .eq(QuestionSlot::getSlotKey, slot));
         if (q == null) {
-            q = generateDailyQuestion(today);
-            dailyQuestionMapper.insert(q);
+            q = generateSlotQuestion(slot);
+            questionSlotMapper.insert(q);
         }
-        DailyAnswer ans = dailyAnswerMapper.selectOne(Wrappers.<DailyAnswer>lambdaQuery()
-                .eq(DailyAnswer::getUserId, userId).eq(DailyAnswer::getQuestionDate, today));
+        QuestionAnswer ans = questionAnswerMapper.selectOne(Wrappers.<QuestionAnswer>lambdaQuery()
+                .eq(QuestionAnswer::getUserId, userId).eq(QuestionAnswer::getSlotKey, slot));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("question", q.getQuestion());
         out.put("options", parseOptions(q.getOptionsJson()));
         out.put("reward", q.getRewardSpirit());
         out.put("answered", ans != null);
         out.put("correct", ans != null && ans.getIsCorrect() != null && ans.getIsCorrect() == 1);
-        out.put("date", today.toString());
+        out.put("slotKey", slot);
+        out.put("slotMinutes", SLOT_MINUTES);
+        out.put("nextSlotSeconds", secondsToNextSlot());
+        out.put("date", LocalDate.now().toString());
         return out;
     }
 
@@ -320,72 +368,168 @@ public class GameServiceImpl implements GameService {
     public Map<String, Object> answerDaily(String authorization, Integer answerIdx) {
         Object[] u = requireUser(authorization);
         Long userId = (Long) u[0];
-        LocalDate today = LocalDate.now();
-        DailyAnswer exist = dailyAnswerMapper.selectOne(Wrappers.<DailyAnswer>lambdaQuery()
-                .eq(DailyAnswer::getUserId, userId).eq(DailyAnswer::getQuestionDate, today));
+        String slot = slotKeyNow();
+        QuestionAnswer exist = questionAnswerMapper.selectOne(Wrappers.<QuestionAnswer>lambdaQuery()
+                .eq(QuestionAnswer::getUserId, userId).eq(QuestionAnswer::getSlotKey, slot));
         if (exist != null) {
-            throw new BizException("今日已答，明日再来");
+            throw new BizException("本轮已答，下一轮 " + SLOT_MINUTES + " 分钟后开启");
         }
-        DailyQuestion q = dailyQuestionMapper.selectOne(Wrappers.<DailyQuestion>lambdaQuery()
-                .eq(DailyQuestion::getQuestionDate, today));
-        if (q == null) {
-            throw new BizException("今日题目尚未开启");
-        }
+        QuestionSlot q = questionSlotMapper.selectOne(Wrappers.<QuestionSlot>lambdaQuery()
+                .eq(QuestionSlot::getSlotKey, slot));
+        if (q == null) throw new BizException("本轮题目尚未开启");
         List<String> options = parseOptions(q.getOptionsJson());
         if (answerIdx == null || answerIdx < 0 || answerIdx >= options.size()) {
             throw new BizException("请选择一个答案");
         }
         boolean correct = answerIdx.equals(q.getAnswerIdx());
-        int reward = correct ? q.getRewardSpirit() : 0;
+        int reward = correct ? (q.getRewardSpirit() == null ? ANSWER_REWARD : q.getRewardSpirit()) : 0;
 
-        DailyAnswer a = new DailyAnswer();
+        QuestionAnswer a = new QuestionAnswer();
         a.setUserId(userId);
-        a.setQuestionDate(today);
+        a.setSlotKey(slot);
         a.setAnswerIdx(answerIdx);
         a.setIsCorrect(correct ? 1 : 0);
         a.setRewardSpirit(reward);
         a.setCreateTime(LocalDateTime.now());
-        dailyAnswerMapper.insert(a);
-        if (correct) {
-            wallet.add(userId, reward, "每日一题");
-        }
+        questionAnswerMapper.insert(a);
+        if (correct) wallet.add(userId, reward, "每旬一题");
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("correct", correct);
         out.put("answerIdx", q.getAnswerIdx());
         out.put("reward", reward);
+        out.put("nextSlotSeconds", secondsToNextSlot());
         out.put("balance", wallet.balance(userId));
         return out;
     }
 
-    /** 从宝库条目里随机出一道「描述出自哪部典籍」 */
-    private DailyQuestion generateDailyQuestion(LocalDate date) {
+    /** 十分钟一槽：形如 2026-11-11-1430，同一槽全站同题 */
+    private String slotKeyNow() {
+        LocalDateTime now = LocalDateTime.now();
+        int bucket = (now.getMinute() / SLOT_MINUTES) * SLOT_MINUTES;
+        return String.format("%s-%02d%02d", now.toLocalDate(), now.getHour(), bucket);
+    }
+
+    /** 距下一轮的秒数（前端倒计时用） */
+    private int secondsToNextSlot() {
+        LocalDateTime now = LocalDateTime.now();
+        int bucket = (now.getMinute() / SLOT_MINUTES) * SLOT_MINUTES;
+        LocalDateTime next = now.withMinute(bucket).withSecond(0).withNano(0)
+                .plusMinutes(SLOT_MINUTES);
+        return Math.max(1, (int) java.time.Duration.between(now, next).getSeconds());
+    }
+
+    /** 按时间槽从宝库条目里出一道「描述出自哪部典籍」，同槽题目固定 */
+    private QuestionSlot generateSlotQuestion(String slot) {
         List<Item> pool = itemMapper.selectList(Wrappers.<Item>lambdaQuery()
                 .eq(Item::getStatus, 1).orderByAsc(Item::getId).last("limit 300"));
-        if (pool.size() < 4) {
-            throw new BizException("题库不足，暂不开放每日一题");
-        }
-        Random rnd = new Random(date.toEpochDay());
+        if (pool.size() < 4) throw new BizException("题库不足，暂不开放每旬一题");
+        Random rnd = new Random(slot.hashCode());
         Item right = pool.get(rnd.nextInt(pool.size()));
         List<String> options = new ArrayList<>();
         options.add(right.getTitle());
         int guard = 0;
         while (options.size() < 4 && guard++ < 300) {
             Item it = pool.get(rnd.nextInt(pool.size()));
-            if (it.getTitle() != null && !options.contains(it.getTitle())) {
-                options.add(it.getTitle());
-            }
+            if (it.getTitle() != null && !options.contains(it.getTitle())) options.add(it.getTitle());
         }
         Collections.shuffle(options, rnd);
 
-        DailyQuestion q = new DailyQuestion();
-        q.setQuestionDate(date);
+        QuestionSlot q = new QuestionSlot();
+        q.setSlotKey(slot);
         q.setQuestion("以下描述，出自哪一部典籍？\n"
                 + (right.getSummary() == null ? "" : right.getSummary()));
         q.setOptionsJson(toJson(options));
         q.setAnswerIdx(options.indexOf(right.getTitle()));
-        q.setRewardSpirit(20);
+        q.setRewardSpirit(ANSWER_REWARD);
         q.setCreateTime(LocalDateTime.now());
         return q;
+    }
+
+    /* ------------------------------ 练功（每 30 秒一次） ------------------------------ */
+    @Override
+    public Map<String, Object> practiceStatus(String authorization) {
+        Object[] u = requireUser(authorization);
+        Long userId = (Long) u[0];
+        Practice p = practiceOf(userId);
+        int cd = cooldownOf(p);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("level", p.getLevel() == null ? 1 : p.getLevel());
+        out.put("exp", p.getExp() == null ? 0 : p.getExp());
+        out.put("expMax", 100);
+        out.put("totalCount", p.getTotalCount() == null ? 0 : p.getTotalCount());
+        out.put("totalSpirit", p.getTotalSpirit() == null ? 0 : p.getTotalSpirit());
+        out.put("cooldownSeconds", cd);
+        out.put("cooldown", PRACTICE_COOLDOWN_SECONDS);
+        out.put("canPractice", cd <= 0);
+        out.put("rewardSpirit", PRACTICE_SPIRIT);
+        out.put("rewardExp", PRACTICE_EXP);
+        out.put("balance", wallet.balance(userId));
+        return out;
+    }
+
+    @Override
+    public Map<String, Object> practiceRun(String authorization) {
+        Object[] u = requireUser(authorization);
+        Long userId = (Long) u[0];
+        String username = (String) u[1];
+        Practice p = practiceOf(userId);
+        int cd = cooldownOf(p);
+        if (cd > 0) throw new BizException("气息未平，尚需 " + cd + " 秒方可再练");
+
+        int level = p.getLevel() == null ? 1 : p.getLevel();
+        int exp = (p.getExp() == null ? 0 : p.getExp()) + PRACTICE_EXP;
+        int gain = PRACTICE_SPIRIT;
+        boolean levelUp = false;
+        if (exp >= 100) {
+            exp -= 100;
+            level += 1;
+            levelUp = true;
+            gain += PRACTICE_LEVEL_UP_SPIRIT;
+        }
+        p.setLevel(level);
+        p.setExp(exp);
+        p.setTotalCount((p.getTotalCount() == null ? 0 : p.getTotalCount()) + 1);
+        p.setTotalSpirit((p.getTotalSpirit() == null ? 0 : p.getTotalSpirit()) + gain);
+        p.setLastTime(LocalDateTime.now());
+        practiceMapper.updateById(p);
+        wallet.add(userId, gain, levelUp ? "练功突破 · 第 " + level + " 重" : "练功");
+        if (levelUp) {
+            eventService.record("山友 " + username + " 练功突破，入第 " + level + " 重，山门同贺。");
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("gain", gain);
+        out.put("level", level);
+        out.put("exp", exp);
+        out.put("levelUp", levelUp);
+        out.put("totalCount", p.getTotalCount());
+        out.put("cooldownSeconds", PRACTICE_COOLDOWN_SECONDS);
+        out.put("balance", wallet.balance(userId));
+        return out;
+    }
+
+    /** 取练功记录，没有就建一条 */
+    private Practice practiceOf(Long userId) {
+        Practice p = practiceMapper.selectOne(Wrappers.<Practice>lambdaQuery()
+                .eq(Practice::getUserId, userId).last("limit 1"));
+        if (p != null) return p;
+        Practice np = new Practice();
+        np.setUserId(userId);
+        np.setLevel(1);
+        np.setExp(0);
+        np.setTotalCount(0);
+        np.setTotalSpirit(0);
+        np.setCreateTime(LocalDateTime.now());
+        practiceMapper.insert(np);
+        return np;
+    }
+
+    private int cooldownOf(Practice p) {
+        if (p.getLastTime() == null) return 0;
+        long passed = java.time.Duration.between(p.getLastTime(), LocalDateTime.now()).getSeconds();
+        return (int) Math.max(0, PRACTICE_COOLDOWN_SECONDS - passed);
     }
 
     /* ------------------------------ 灵石钱包 ------------------------------ */

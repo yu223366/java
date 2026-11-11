@@ -7,7 +7,9 @@
 // 所有数据接口见 ../api/home.js —— 前端 mock 可跑，后端接上即用。
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { homeApi } from '../api/home'
+import { marketApi } from '../api/market'
 import DebatePanel from './DebatePanel.vue'
+import ItemDetailModal from './ItemDetailModal.vue'
 import { observerApi } from '../api/sect'
 import { auctionApi } from '../api/auction'
 import { ELEMENTS, findElement } from '../constants/wuxing'
@@ -107,7 +109,7 @@ function preloadNavBg() {
 function switchNav(item) {
   activeNav.value = item.key
   // 宝库 → 宝库页；拍卖行 → 拍卖行页；修行 → 修行洞府（均 App 层切视图）；观山/论道/市集在首页内切换内容
-  if (['baoku', 'paimai', 'xiuxing', 'mijing', 'liandan', 'duijue', 'chuanshu', 'zongmen', 'guanshantai'].includes(item.key)) {
+  if (['baoku', 'paimai', 'xiuxing', 'mijing', 'liandan', 'lianqi', 'zhenfa', 'duijue', 'chuanshu', 'zongmen', 'guanshantai'].includes(item.key)) {
     emit('nav', item)
     return
   }
@@ -533,6 +535,9 @@ const mkKeyword = ref('')
 const mkElement = ref('all')
 const mkGrade = ref('all')
 const mkCategory = ref('all')
+const mkShop = ref('all')
+const shops = ref([])
+const marketDetail = ref(null)
 const mkMsg = ref('')
 let mkMsgTimer = null
 
@@ -543,11 +548,12 @@ const mkCategories = computed(() => {
 })
 
 async function fetchMarket(page) {
-  const res = await homeApi.getMarketItems({
+  const res = await marketApi.getItems({
     keyword: mkKeyword.value.trim(),
     element: mkElement.value,
     grade: mkGrade.value,
     category: mkCategory.value,
+    shop: mkShop.value,
     page,
     size: MK_SIZE
   })
@@ -557,10 +563,17 @@ async function fetchMarket(page) {
   mkTotal.value = res.total ?? items.length
 }
 
+async function loadShops() {
+  try {
+    shops.value = await marketApi.getShops()
+  } catch (e) { /* 摊位读取失败不影响列表 */ }
+}
+
 async function loadMarket(reset) {
   if (mkLoading.value) return
   mkLoading.value = true
   try {
+    if (!shops.value.length) await loadShops()
     await fetchMarket(reset ? 1 : Math.floor(market.value.length / MK_SIZE) + 1)
   } catch (e) {
     if (reset) market.value = []
@@ -573,19 +586,31 @@ function rerunMarket() {
   if (navLoaded.value.shiji) loadMarket(true)
 }
 function pickMkCategory(k) { mkCategory.value = k; rerunMarket() }
+function pickMkShop(k) { mkShop.value = k; mkCategory.value = 'all'; rerunMarket() }
 function pickMkElement(k) { mkElement.value = k; rerunMarket() }
 function pickMkGrade(k) { mkGrade.value = k; rerunMarket() }
 function searchMarket() { rerunMarket() }
 
-/** 购得一件：后端校验库存并扣减（防超卖），成功后刷新卡片 */
+/** 点卡片看全文详情：详细介绍 / 获取途径 / 品质定价 */
+async function showMarketDetail(m) {
+  try {
+    const r = await marketApi.getDetail(m.id)
+    marketDetail.value = { ...m, ...(r || {}) }
+  } catch (e) {
+    marketDetail.value = { ...m, detail: m.desc }
+  }
+}
+
+/** 购得一件：后端校验登录、扣灵石、扣库存、物品进背包 */
 async function buyItem(m) {
   if (buying.value[m.id] || !m.stock) return
   buying.value = { ...buying.value, [m.id]: true }
   mkMsg.value = ''
   try {
-    const r = await homeApi.buyMarketItem(m.id, 1)
-    Object.assign(m, r)
-    mkMsg.value = `已购得「${m.title}」，灵石 ${m.price} 枚成交。`
+    const r = await marketApi.buy(m.id, 1)
+    m.stock = r.stock
+    m.sold = r.sold
+    mkMsg.value = `已购得「${m.title}」，耗 ${r.spent} 灵石，已入背包。`
   } catch (e) {
     mkMsg.value = e && e.message ? e.message : '交易未成，稍后再试。'
     if (/售罄|库存不足|抢空/.test(mkMsg.value)) loadMarket(true)
@@ -1119,10 +1144,20 @@ onBeforeUnmount(() => {
       <!-- ============ 市集（导航「市集」：筛选 + 灵石购买 + 分页） ============ -->
       <section class="block market-panel" v-if="activeNav === 'shiji'">
         <h2 class="block-title">雾 山 市 集</h2>
-        <p class="block-sub">以灵石易物 · 童叟无欺 · 售罄即止</p>
+        <p class="block-sub">以灵石易物 · 按品阶定价 · 丹药材料铺 / 炼器材料铺 / 阵法材料铺 · 购得入背包</p>
 
         <!-- 市集筛选 -->
         <div class="filters mk-filters">
+          <div class="f-row" v-if="shops.length">
+            <span class="f-label">摊 位</span>
+            <span
+              v-for="s in shops"
+              :key="s.key"
+              class="f-chip"
+              :class="{ on: mkShop === s.key }"
+              @click="pickMkShop(s.key)"
+            >{{ s.label }}<small> · {{ s.count }}</small></span>
+          </div>
           <div class="f-row" v-if="mkCategories.length">
             <span class="f-label">分 类</span>
             <span class="f-chip" :class="{ on: mkCategory === 'all' }" @click="pickMkCategory('all')">全部</span>
@@ -1172,7 +1207,7 @@ onBeforeUnmount(() => {
 
         <!-- 物品卡片 -->
         <div class="mk-grid" v-if="market.length">
-          <div v-for="m in market" :key="m.id" class="mk-card" :class="{ gone: !m.stock }">
+          <div v-for="m in market" :key="m.id" class="mk-card" :class="{ gone: !m.stock }" @click="showMarketDetail(m)">
             <div class="mk-head">
               <span class="r-tag" :class="'t-' + m.element">{{ findElement(m.element).label }}</span>
               <span
@@ -1191,7 +1226,10 @@ onBeforeUnmount(() => {
                 {{ buying[m.id] ? '成交…' : m.stock ? '购 得' : '无 货' }}
               </button>
             </div>
-            <div class="mk-seller">摊主 · {{ m.seller }}<template v-if="m.sold"> · 已售 {{ m.sold }}</template></div>
+            <div class="mk-seller">
+              摊主 · {{ m.seller }}<template v-if="m.sold"> · 已售 {{ m.sold }}</template>
+              <span class="mk-detail">详 情 ›</span>
+            </div>
           </div>
         </div>
         <div class="results-empty" v-else-if="!mkLoading">市集暂无此物，改日再来。</div>
@@ -1202,6 +1240,9 @@ onBeforeUnmount(() => {
             {{ mkLoading ? '逛 …' : '再 看 一 批' }}
           </button>
         </div>
+
+        <!-- 市集物品详情：全文介绍 / 获取途径 / 品质定价 -->
+        <ItemDetailModal :item="marketDetail" @close="marketDetail = null" />
       </section>
 
       <!-- 墨韵页脚 -->
@@ -2799,7 +2840,14 @@ onBeforeUnmount(() => {
   font-size: 11.5px;
   color: var(--muted);
   letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.mk-card { cursor: pointer; }
+.mk-detail { margin-left: auto; color: #e8c372; font-size: 11px; letter-spacing: 1px; }
+.mk-card:hover .mk-detail { text-decoration: underline; }
+.f-chip small { font-size: 10px; opacity: 0.7; }
 @media (max-width: 760px) {
   .mk-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

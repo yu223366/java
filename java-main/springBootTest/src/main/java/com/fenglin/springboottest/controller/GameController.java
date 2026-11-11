@@ -75,6 +75,18 @@ public class GameController {
         return Result.ok(gameService.answerDaily(authorization, req.getAnswerIdx()));
     }
 
+    @GetMapping("/practice/status")
+    public Result<Map<String, Object>> practiceStatus(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        return Result.ok(gameService.practiceStatus(authorization));
+    }
+
+    @PostMapping("/practice/run")
+    public Result<Map<String, Object>> practiceRun(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        return Result.ok(gameService.practiceRun(authorization));
+    }
+
     @GetMapping("/wallet")
     public Result<Map<String, Object>> wallet(
             @RequestHeader(value = "Authorization", required = false) String authorization) {

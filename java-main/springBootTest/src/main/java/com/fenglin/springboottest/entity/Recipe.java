@@ -42,6 +42,12 @@ public class Recipe implements Serializable {
     /** 状态：1 可炼 / 0 停用 */
     private Integer status;
 
+    /** 成功率（百分比）：越高越容易成，失败只耗材料与灵石，不出产物 */
+    private Integer successRate;
+
+    /** 炼制类别：danyao 炼丹 / lianqi 炼器 / zhenfa 阵法 */
+    private String craftType;
+
 
     /** 创建时间 */
     private LocalDateTime createTime;

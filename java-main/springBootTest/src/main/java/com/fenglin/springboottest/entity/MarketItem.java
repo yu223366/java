@@ -48,6 +48,21 @@ public class MarketItem implements Serializable {
     /** 状态：1 在售 / 0 下架 */
     private Integer status;
 
+    /** 详细介绍（市集点开后展示的全文） */
+    private String detail;
+
+    /** 获取途径 */
+    private String acquire;
+
+    /** 摊位 key：dan_cai 丹药材料铺 / qi_cai 炼器材料铺 / zhen_cai 阵法材料铺 / danyao / faqi / zahuo */
+    private String shopKey;
+
+    /** 对应背包物品 id（购得后入包用） */
+    private Long itemRef;
+
+    /** 品质基准价（灵石） */
+    private Integer gradePrice;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

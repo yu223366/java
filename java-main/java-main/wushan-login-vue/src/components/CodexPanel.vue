@@ -5,6 +5,9 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { codexApi } from '../api/codex'
 import WantedPanel from './WantedPanel.vue'
+import SectVault from './SectVault.vue'
+import ConsignPanel from './ConsignPanel.vue'
+import ItemDetailModal from './ItemDetailModal.vue'
 import { ELEMENTS, findElement } from '../constants/wuxing'
 import { GRADES, findGrade, CATEGORIES } from '../constants/codex'
 
@@ -29,9 +32,27 @@ const total = ref(0)
 
 const tabs = [
   ...CATEGORIES,
+  { key: 'dan_cai', label: '丹药材料', en: 'pill material' },
+  { key: 'qi_cai', label: '炼器材料', en: 'forge material' },
+  { key: 'zhen_cai', label: '阵法材料', en: 'array material' },
+  { key: 'danyao', label: '丹药', en: 'pill' },
+  { key: 'zhenfa_wu', label: '阵法', en: 'formation' },
+  { key: 'wuqi', label: '武器', en: 'weapon' },
+  { key: 'fabao', label: '法宝', en: 'treasure' },
   { key: 'linggen', label: '灵根', en: 'spirit root' },
   { key: 'mijing', label: '秘境', en: 'secret realm' }
 ]
+
+/* 物品详情弹层：点卡片拉全文介绍 / 获取途径 / 用途 */
+const detailItem = ref(null)
+async function openDetail(it) {
+  try {
+    const r = await codexApi.getItemDetail(it.id)
+    detailItem.value = { ...it, ...(r || {}) }
+  } catch (e) {
+    detailItem.value = { ...it, detail: it.desc, acquire: '宝库查阅' }
+  }
+}
 
 const activeElementInfo = computed(() =>
   activeElement.value === 'all' ? null : findElement(activeElement.value)
@@ -94,7 +115,7 @@ function resetGrade() {
         <div class="seal">宝<br />库</div>
         <div class="brand-text">
           <span class="name">宝库</span>
-          <small>功 法 · 心 得 · 资 源 · 灵 根 · 秘 境</small>
+          <small>功 法 · 心 得 · 资 源 · 丹 器 阵 · 灵 根 · 秘 境</small>
         </div>
       </div>
       <div class="head-stat">{{ loading ? '翻 检 中…' : `共 藏 · ${total} 条` }}</div>
@@ -123,6 +144,10 @@ function resetGrade() {
       <!-- 右侧内容区 -->
       <section class="main">
         <WantedPanel />
+        <!-- 宝库归宗门管：贡献点兑换 + 山友寄售（灵石 / 以物换物） -->
+        <SectVault />
+        <ConsignPanel />
+
         <!-- 分类页签 -->
         <div class="tabs">
           <div
@@ -193,7 +218,7 @@ function resetGrade() {
 
           <!-- 功法 / 心得 / 资源卡片 -->
           <template v-else>
-            <div v-for="it in items" :key="it.id" class="item">
+            <div v-for="it in items" :key="it.id" class="item" @click="openDetail(it)">
               <span class="grade-badge" :style="{ color: findGrade(it.grade).color, borderColor: findGrade(it.grade).color }">{{ findGrade(it.grade).label }}</span>
               <div class="item-title">
                 <span class="el-chip" :class="'t-' + it.element">{{ findElement(it.element).label }}</span>
@@ -202,6 +227,7 @@ function resetGrade() {
               <p class="item-desc">{{ it.desc }}</p>
               <div class="item-foot">
                 <span class="el-name" :class="'t-' + it.element">{{ findElement(it.element).label }}行</span>
+                <span class="detail-link">详 情 ›</span>
               </div>
             </div>
           </template>
@@ -211,6 +237,9 @@ function resetGrade() {
         <div class="empty" v-else-if="!loading">库中无此藏，换个元素或品阶再翻。</div>
       </section>
     </div>
+
+    <!-- 物品详情：全文介绍 / 怎么获取 / 用途与功效 -->
+    <ItemDetailModal :item="detailItem" @close="detailItem = null" />
   </div>
 </template>
 
@@ -552,6 +581,11 @@ function resetGrade() {
   font-size: 12px;
   letter-spacing: 2px;
 }
+.item { cursor: pointer; }
+.detail-link { color: #e8c372; font-size: 11px; letter-spacing: 1px; }
+.item:hover .detail-link { text-decoration: underline; }
+/* 分类页签变多后允许横向滚动，不挤压卡片 */
+.tabs { flex-wrap: wrap; }
 .el-name.t-jin { color: #e8c372; }
 .el-name.t-mu { color: #4caf6e; }
 .el-name.t-shui { color: #3a8fd0; }

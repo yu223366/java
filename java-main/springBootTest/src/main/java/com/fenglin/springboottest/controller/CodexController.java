@@ -5,6 +5,8 @@ import com.fenglin.springboottest.controller.dto.*;
 import com.fenglin.springboottest.service.CodexService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * 宝库控制器，对接前端 src/api/codex.js 的接口契约。
  * 所有接口前缀 /api/codex（前端 BASE_URL=/api，由 Vite 代理到 8080）。
@@ -34,6 +36,12 @@ public class CodexController {
                                         @RequestParam(required = false) String grade,
                                         @RequestParam(required = false) String q) {
         return Result.ok(codexService.items(element, category, grade, q));
+    }
+
+    /** 单件物品详情（宝库点开卡片时拉取全文介绍与获取途径） */
+    @GetMapping("/item/{id}")
+    public Result<Map<String, Object>> itemDetail(@PathVariable("id") Long id) {
+        return Result.ok(codexService.itemDetail(id));
     }
 
     /** 灵根列表。查询参数：element / grade */

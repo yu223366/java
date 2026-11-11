@@ -26,7 +26,10 @@ public interface WorldService {
     /** 配方列表（含材料是否够用） */
     List<Map<String, Object>> recipes(String authorization);
 
-    /** 炼制：扣材料与灵石，产物入背包 */
+    /** 按炼制类别取配方：danyao 炼丹 / lianqi 炼器 / zhenfa 阵法；空为全部 */
+    List<Map<String, Object>> recipes(String authorization, String craftType);
+
+    /** 炼制：扣材料与灵石，按成功率判定成败；失败不出产物并退还部分灵石 */
     Map<String, Object> craft(String authorization, Long recipeId);
 
     /** 发起对决：随机匹配一位在线山友 */

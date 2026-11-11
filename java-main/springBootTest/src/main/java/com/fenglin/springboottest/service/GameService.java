@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 山门玩法：测灵根 / 每日签到 / 每日一题。
+ * 山门玩法：测灵根（重测有代价）/ 每日签到 / 每旬一题（十分钟一轮）/ 练功（30 秒一次）。
  */
 public interface GameService {
 
@@ -26,8 +26,14 @@ public interface GameService {
     /** 今日一题 */
     Map<String, Object> dailyQuestion(String authorization);
 
-    /** 提交今日一题答案 */
+    /** 提交本轮一题答案（十分钟一轮） */
     Map<String, Object> answerDaily(String authorization, Integer answerIdx);
+
+    /** 练功状态（重数 / 修为 / 冷却秒数） */
+    Map<String, Object> practiceStatus(String authorization);
+
+    /** 练功一次：30 秒冷却，得灵石与修为 */
+    Map<String, Object> practiceRun(String authorization);
 
     /** 灵石钱包：余额 + 最近流水 */
     Map<String, Object> wallet(String authorization);

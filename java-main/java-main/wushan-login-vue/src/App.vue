@@ -67,6 +67,8 @@ function onNav(item) {
   if (item.key === 'xiuxing') view.value = 'game'
   if (item.key === 'mijing') view.value = 'explore'
   if (item.key === 'liandan') view.value = 'alchemy'
+  if (item.key === 'lianqi') view.value = 'lianqi'
+  if (item.key === 'zhenfa') view.value = 'zhenfa'
   if (item.key === 'duijue') view.value = 'duel'
   if (item.key === 'chuanshu') view.value = 'letter'
   if (item.key === 'zongmen') view.value = 'sect'
@@ -164,7 +166,7 @@ const hint = computed(() =>
           @to-home="view = 'home'"
         />
         <WorldPanel
-          v-else-if="['explore', 'alchemy', 'duel', 'letter'].includes(view)"
+          v-else-if="['explore', 'alchemy', 'lianqi', 'zhenfa', 'duel', 'letter'].includes(view)"
           :key="view"
           :tab="view"
           @to-home="view = 'home'"

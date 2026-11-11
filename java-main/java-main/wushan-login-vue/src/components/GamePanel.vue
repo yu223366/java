@@ -3,7 +3,7 @@
  * 修行洞府：测灵根 · 每日签到 · 每日一题 · 灵石钱包
  * 三件事都直接补给玩家资源：灵石（签到 / 答题）、身份（灵根）、每日回访理由（一题）。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { gameApi } from '../api/game'
 import { findElement } from '../constants/wuxing'
 import { findGrade, SPIRIT_ROOTS } from '../constants/codex'
@@ -39,13 +39,20 @@ const answering = ref(false)
 const TABS = [
   { key: 'spirit', label: '测灵根', en: 'spirit root' },
   { key: 'signin', label: '每日签到', en: 'sign in' },
-  { key: 'daily', label: '每日一题', en: 'daily' }
+  { key: 'daily', label: '每旬一题', en: '10 min quiz' },
+  { key: 'practice', label: '练功', en: 'practice' }
 ]
+
+/* 练功：每 30 秒一次；每旬一题：10 分钟一轮 */
+const practice = ref(null)
+const practiceCd = ref(0)
+const slotCd = ref(0)
+let tickTimer = null
 const SIGN_REWARD = [10, 20, 30, 40, 50, 60, 100]
 const question = computed(() => (quiz.value?.questions || [])[qi.value] || null)
 const picked = computed(() => (picks.value[qi.value] === undefined ? -1 : picks.value[qi.value]))
 const elementInfo = computed(() => findElement(spiritResult.value?.element || mySpirit.value?.element))
-const currentSpirit = computed(() => spiritResult.value || (mySpirit.value?.hasProfile ? mySpirit.value : null))
+const currentSpirit = computed(() => (mySpirit.value?.hasProfile ? mySpirit.value : spiritResult.value))
 
 function flash(m) {
   msg.value = m
@@ -68,6 +75,10 @@ async function loadSpirit() {
 }
 
 function startQuiz() {
+  // 首测免费，重测要 100 灵石；余额不足就别让山友白答八题
+  if (mySpirit.value?.hasProfile && (wallet.value.balance || 0) < (mySpirit.value.retestCost || 100)) {
+    return flash('灵石不足，重测需 ' + (mySpirit.value.retestCost || 100) + ' 灵石')
+  }
   picks.value = []
   qi.value = 0
   spiritResult.value = null
@@ -92,6 +103,7 @@ async function nextQuestion() {
     spiritResult.value = await gameApi.submitSpirit(picks.value)
     mySpirit.value = { hasProfile: true, ...spiritResult.value }
     flash('灵根鉴定完成')
+    await Promise.all([loadSpirit(), loadWallet()])
   } catch (e) {
     err.value = e.message || '鉴定失败'
   } finally {
@@ -121,9 +133,11 @@ async function doSign() {
 async function loadDaily() {
   try {
     daily.value = await gameApi.getDailyQuestion()
-    if (daily.value?.answered) dailyPick.value = -1
+    slotCd.value = daily.value?.nextSlotSeconds || 600
+    dailyDone.value = null
+    dailyPick.value = -1
   } catch (e) {
-    err.value = e.message || '今日题目读取失败'
+    err.value = e.message || '本轮题目读取失败'
   }
 }
 
@@ -133,8 +147,16 @@ async function answerDaily(idx) {
   answering.value = true
   try {
     dailyDone.value = await gameApi.answerDaily(idx)
-    flash(dailyDone.value.correct ? `答对了，得 ${dailyDone.value.reward} 灵石` : '答错了，明日再来')
-    await Promise.all([loadDaily(), loadWallet()])
+    flash(dailyDone.value.correct
+      ? `答对了，得 ${dailyDone.value.reward} 灵石 · 下一轮 ${formatCd(dailyDone.value.nextSlotSeconds || slotCd.value)} 后开启`
+      : `答错了，下一轮 ${formatCd(dailyDone.value.nextSlotSeconds || slotCd.value)} 后再来`)
+    // 保留本轮对错反馈，只切换已答状态；倒计时交给本地 tick
+    if (daily.value) {
+      daily.value.answered = true
+      daily.value.correct = dailyDone.value.correct
+    }
+    slotCd.value = dailyDone.value.nextSlotSeconds || slotCd.value
+    await loadWallet()
   } catch (e) {
     flash(e.message || '提交失败')
     dailyPick.value = -1
@@ -143,11 +165,38 @@ async function answerDaily(idx) {
   }
 }
 
+/* ------------------------------ 练功 ------------------------------ */
+async function loadPractice() {
+  try {
+    practice.value = await gameApi.getPracticeStatus()
+    practiceCd.value = practice.value?.cooldownSeconds || 0
+  } catch (e) { /* 练功状态失败不阻塞 */ }
+}
+
+async function doPractice() {
+  if (practiceCd.value > 0) return
+  try {
+    const r = await gameApi.practiceRun()
+    flash(r.levelUp
+      ? `突破！入第 ${r.level} 重，得 ${r.gain} 灵石`
+      : `练功一遍，得 ${r.gain} 灵石 · 修为 +10`)
+    await Promise.all([loadPractice(), loadWallet()])
+  } catch (e) { flash(e.message || '练功未成') }
+}
+
+function formatCd(sec) {
+  const s = Math.max(0, Number(sec) || 0)
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+}
+
+const practiceExpPct = computed(() => Math.min(100, practice.value?.exp || 0))
+
 function switchTab(k) {
   tab.value = k
   err.value = ''
   if (k === 'signin') loadSign()
   if (k === 'daily') loadDaily()
+  if (k === 'practice') loadPractice()
 }
 
 onMounted(() => {
@@ -155,7 +204,17 @@ onMounted(() => {
   loadSpirit()
   loadSign()
   loadDaily()
+  loadPractice()
+  // 每秒推进两个冷却；到点时自动拉一轮新题
+  tickTimer = setInterval(() => {
+    if (practiceCd.value > 0) practiceCd.value -= 1
+    if (slotCd.value > 0) {
+      slotCd.value -= 1
+      if (slotCd.value === 0) loadDaily()
+    }
+  }, 1000)
 })
+onBeforeUnmount(() => { clearInterval(tickTimer) })
 </script>
 
 <template>
@@ -168,7 +227,7 @@ onMounted(() => {
         <div class="seal">修<br />行</div>
         <div class="brand-text">
           <span class="name">修行洞府</span>
-          <small>测 灵 根 · 签 到 · 每 日 一 题</small>
+          <small>测 灵 根 · 签 到 · 每 旬 一 题 · 练 功</small>
         </div>
       </div>
       <div class="head-stat">灵 石 · {{ wallet.balance || 0 }}</div>
@@ -198,7 +257,14 @@ onMounted(() => {
               <h2>{{ currentSpirit.rootName }}</h2>
               <p class="root-grade">{{ currentSpirit.gradeLabel }} · 契合 {{ currentSpirit.score }} 分</p>
               <p class="root-desc">{{ currentSpirit.summary }}</p>
-              <button class="mini-btn" @click="startQuiz">重 新 测 评</button>
+              <div class="retest-row">
+                <button class="mini-btn" :disabled="currentSpirit && currentSpirit.canRetest === false" @click="startQuiz">
+                  重 新 测 评 · {{ currentSpirit?.retestCost || 100 }} 灵 石
+                </button>
+                <small v-if="currentSpirit">
+                  今 日 已 测 {{ currentSpirit.retestCountToday || 0 }} / {{ currentSpirit.retestLimit || 5 }} 次
+                </small>
+              </div>
             </div>
           </div>
 
@@ -277,13 +343,15 @@ onMounted(() => {
           </div>
         </template>
 
-        <!-- ============ 每日一题 ============ -->
-        <template v-else>
+        <!-- ============ 每旬一题（10 分钟一轮） ============ -->
+        <template v-else-if="tab === 'daily'">
           <div v-if="daily" class="daily-card">
             <div class="daily-head">
-              <span class="daily-date">{{ daily.date }}</span>
+              <span class="daily-date">{{ daily.slotKey || daily.date }} · 十 分 钟 一 轮</span>
               <span class="daily-reward">答对得 {{ daily.reward }} 灵石</span>
             </div>
+            <div class="cd-bar"><i :style="{ width: (100 - Math.min(100, slotCd / 6)) + '%' }"></i></div>
+            <p class="cd-text">距下一轮 {{ formatCd(slotCd) }}</p>
             <p class="daily-q">{{ daily.question }}</p>
             <div class="q-options">
               <button
@@ -302,8 +370,39 @@ onMounted(() => {
               </button>
             </div>
             <p v-if="daily?.answered" class="daily-done">
-              {{ daily.correct ? '今日已答对，' + daily.reward + ' 灵石已入账。' : '今日已答，明日再来。' }}
+              {{ daily.correct ? '本轮答对，' + daily.reward + ' 灵石已入账。' : '本轮已答。' }}
+              十分钟后新题自动开启。
             </p>
+          </div>
+        </template>
+
+        <!-- ============ 练功（每 30 秒一次） ============ -->
+        <template v-else>
+          <div class="practice-card">
+            <div class="pc-head">
+              <div>
+                <small>练 功 重 数</small>
+                <strong>第 {{ practice?.level || 1 }} 重</strong>
+              </div>
+              <div class="pc-total">
+                <small>累 计</small>
+                <strong>{{ practice?.totalCount || 0 }} 遍</strong>
+              </div>
+            </div>
+            <div class="pc-ring" :class="{ ready: practiceCd <= 0 }">
+              <span class="pc-cd">{{ practiceCd > 0 ? formatCd(practiceCd) : '可 练' }}</span>
+              <span class="pc-sub">{{ practiceCd > 0 ? '气 息 未 平' : '一 息 一 遍' }}</span>
+            </div>
+            <div class="pc-exp">
+              <span>修 为 {{ practice?.exp || 0 }} / 100</span>
+              <div class="pc-bar"><i :style="{ width: practiceExpPct + '%' }"></i></div>
+              <small>满 100 突破一重，另赏 20 灵石</small>
+            </div>
+            <p class="pc-tip">每 30 秒可练一遍，一遍得 {{ practice?.rewardSpirit || 3 }} 灵石、修为 +10。
+              所得灵石可去市集按品质买丹药 / 炼器 / 阵法材料。</p>
+            <button class="main-btn wide" :disabled="practiceCd > 0" @click="doPractice">
+              {{ practiceCd > 0 ? '调 息 中 · ' + formatCd(practiceCd) : '运 功 一 遍' }}
+            </button>
           </div>
         </template>
 
@@ -495,6 +594,34 @@ onMounted(() => {
 .daily-reward { font-size: 13px; letter-spacing: 2px; color: #e8c372; }
 .daily-q { font-size: 19px; line-height: 2; letter-spacing: 2px; margin-bottom: 24px; white-space: pre-line; }
 .daily-done { margin-top: 18px; font-size: 13px; letter-spacing: 2px; color: #e8c372; }
+
+/* ---------- 重测 / 倒计时 / 练功 ---------- */
+.retest-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.retest-row small { font-size: 11px; letter-spacing: 1px; color: var(--muted); }
+.cd-bar { height: 4px; margin-top: 14px; background: rgba(236, 228, 210, 0.1); }
+.cd-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a2f1e, #e8c372); transition: width 1s linear; }
+.cd-text { margin: 6px 0 0; font-size: 11px; letter-spacing: 2px; color: #e8c372; text-align: right; }
+.practice-card {
+  padding: 26px 30px; border: 1px solid var(--line); background: rgba(12, 17, 16, 0.55);
+}
+.pc-head { display: flex; align-items: baseline; gap: 30px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.pc-head small, .pc-total small { display: block; font-size: 11px; letter-spacing: 3px; color: var(--muted); }
+.pc-head strong { font-size: 24px; letter-spacing: 3px; font-weight: normal; color: #e8c372; }
+.pc-total { margin-left: auto; }
+.pc-total strong { font-size: 18px; }
+.pc-ring {
+  width: 168px; height: 168px; margin: 26px auto; border-radius: 50%;
+  display: grid; place-content: center; gap: 6px; text-align: center;
+  border: 2px solid rgba(232, 195, 114, 0.28); background: radial-gradient(circle, rgba(232, 195, 114, 0.08), transparent 70%);
+}
+.pc-ring.ready { border-color: #e8c372; box-shadow: 0 0 28px rgba(232, 195, 114, 0.2); }
+.pc-cd { font-size: 30px; letter-spacing: 3px; color: #e8c372; }
+.pc-sub { font-size: 11px; letter-spacing: 3px; color: var(--muted); }
+.pc-exp { margin-bottom: 18px; font-size: 12px; letter-spacing: 2px; color: var(--muted); }
+.pc-bar { height: 6px; margin: 8px 0; background: rgba(236, 228, 210, 0.1); }
+.pc-bar i { display: block; height: 100%; background: linear-gradient(90deg, #3a8fd0, #97c459); transition: width 0.3s; }
+.pc-exp small { font-size: 11px; }
+.pc-tip { font-size: 13px; line-height: 2; letter-spacing: 1px; color: rgba(236, 228, 210, 0.78); margin: 0 0 18px; }
 
 /* 流水 */
 .rail-title {

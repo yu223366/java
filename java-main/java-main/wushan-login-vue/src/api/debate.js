@@ -53,6 +53,10 @@ export const debateApi = {
   },
   reply(topic, side, quote) {
     return request('/debate/reply', { method: 'POST', data: { topic, side, quote } })
+  },
+  /** 给一条陈词点赞（一人一票，票多者胜） */
+  like(id) {
+    return request('/debate/like', { method: 'POST', data: { id } })
   }
 }
 

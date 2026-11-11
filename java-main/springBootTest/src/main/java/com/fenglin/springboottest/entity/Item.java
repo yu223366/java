@@ -43,6 +43,18 @@ public class Item implements Serializable {
     /** 拍卖状态：0=未拍卖（默认） 1=已拍卖（拍卖行成交后置 1，不再入池） */
     private Integer auction;
 
+    /** 详细介绍（宝库点开后展示的全文） */
+    private String detail;
+
+    /** 获取途径（市集 / 秘境 / 炼制 / 宗门宝库 / 寄售） */
+    private String acquire;
+
+    /** 用途与功效 */
+    private String effect;
+
+    /** 品质基准价（灵石）：凡10 黄30 玄100 地300 天900 圣2700 */
+    private Integer gradePrice;
+
     /** 创建时间 */
     @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
     private LocalDateTime createTime;

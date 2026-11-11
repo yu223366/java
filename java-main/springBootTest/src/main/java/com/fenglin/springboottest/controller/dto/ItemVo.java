@@ -31,4 +31,16 @@ public class ItemVo {
 
     /** 品阶中文名 */
     private String gradeLabel;
+
+    /** 详细介绍（点开条目后展示的全文） */
+    private String detail;
+
+    /** 获取途径 */
+    private String acquire;
+
+    /** 用途与功效 */
+    private String effect;
+
+    /** 品质基准价（灵石） */
+    private Integer gradePrice;
 }

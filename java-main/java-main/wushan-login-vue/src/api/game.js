@@ -80,6 +80,14 @@ export const gameApi = {
   },
   getWallet() {
     return request('/game/wallet')
+  },
+  /** 练功状态（重数 / 修为 / 30 秒冷却） */
+  getPracticeStatus() {
+    return request('/game/practice/status')
+  },
+  /** 练功一次 */
+  practiceRun() {
+    return request('/game/practice/run', { method: 'POST' })
   }
 }
 

@@ -36,6 +36,9 @@ public class ExploreLog implements Serializable {
     /** 本次消耗灵石 */
     private Integer costSpirit;
 
+    /** 本次触发的奇遇（JSON，未触发为空） */
+    private String fortuneJson;
+
 
     /** 创建时间 */
     private LocalDateTime createTime;

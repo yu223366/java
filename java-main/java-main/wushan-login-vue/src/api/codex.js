@@ -125,6 +125,15 @@ export const codexApi = {
       return { total: items.length, items }
     }
     return request('/codex/realms', { query: filters })
+  },
+
+  /** 单件物品详情：全文介绍 / 获取途径 / 用途 / 品质基准价 */
+  getItemDetail(id) {
+    if (USE_MOCK) {
+      const it = (treasury.getList('items') || []).find((x) => String(x.id) === String(id))
+      return Promise.resolve(it ? { ...it, detail: it.desc, acquire: '宝库查阅', effect: '研读 / 收藏' } : {})
+    }
+    return request('/codex/item/' + id)
   }
 }
 
