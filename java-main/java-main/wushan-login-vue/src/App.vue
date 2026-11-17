@@ -50,11 +50,12 @@ function onEnterHome(name, r) {
   view.value = 'home'
 }
 
-// 首页「出山」：回到登录页（本地会话一并清掉，刷新后不会自动复登）
+// 首页「出山」：回到登录页（令牌与本地会话一并清掉，刷新后不会自动复登）
 function onLogout() {
   username.value = ''
   role.value = 1
   sessionStore.clear()
+  tokenStore.clear()
   view.value = 'login'
 }
 
@@ -102,20 +103,42 @@ function onAdminLogout() {
 const emberIntensity = computed(() => (view.value === 'login' || view.value === 'register' ? 1 : 0.45))
 
 // 会话恢复：刷新 / 重开页面后，若本地还留着令牌就自动回到首页。
-// 关键：权限不信任本地缓存 —— 真实后端模式下用令牌换一次 /home/user/info，
-// role 以服务端返回为准；令牌失效（未登录 / 签名不符）则清干净停在登录页。
+// 修复「首页一刷新就跳登录页」：
+//   原逻辑把 view='home' 放在 await getUserInfo 之后，且 catch 里无条件清空令牌/会话。
+//   真实后端模式下只要后端没启动 / 网络抖动 / 校验超时，请求一失败就被踢回登录页；
+//   而且因为会话已被清掉，之后再也恢复不了，只能重新登录。
+// 新策略：
+//   1) 本地有「令牌 + 名号」就先用本地会话直接回首页 —— 刷新不再依赖后端是否在线；
+//   2) 再后台异步校验一次，role 用服务端返回值校正（mock 下仍用本地值）；
+//   3) 只有后端明确判定令牌无效/未登录/查无此山籍才清会话回登录页；
+//      网络错误、超时、后端 5xx 一律保留本地登录态，避免误踢。
 onMounted(async () => {
   const s = sessionStore.get()
-  if (!s || !s.username || !tokenStore.get()) return
+  const token = tokenStore.get()
+  if (!s || !s.username || !token) return
+
+  // 先用本地会话恢复首页：不 await、不依赖后端，刷新立即可用
+  username.value = s.username
+  role.value = Number(s.role) === 0 ? 0 : 1
+  view.value = 'home'
+
+  // 后台异步校正权限：后端在线时以服务端 role 为准；失败则保留本地值
   try {
     const u = await homeApi.getUserInfo(s.username)
     username.value = (u && u.username) || s.username
-    // mock 的用户信息没有 role，回落本地会话值；真实后端一律以服务端为准
-    role.value = USE_MOCK ? (Number(s.role) === 0 ? 0 : 1) : (Number(u && u.role) === 0 ? 0 : 1)
-    view.value = 'home'
+    if (!USE_MOCK && u && typeof u.role !== 'undefined') {
+      role.value = Number(u.role) === 0 ? 0 : 1
+    }
   } catch (e) {
-    tokenStore.clear()
-    sessionStore.clear()
+    const msg = (e && e.message) || ''
+    // 仅「明确鉴权失败」才清会话；网络异常 / 超时 / 后端未启动一律保留登录态
+    if (/令牌无效|签名不符|未登录|查无此山籍|请重新入境|重新登录|401|403/.test(msg)) {
+      tokenStore.clear()
+      sessionStore.clear()
+      username.value = ''
+      role.value = 1
+      view.value = 'login'
+    }
   }
 })
 
